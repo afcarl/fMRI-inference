@@ -1,8 +1,10 @@
-from plot_simulated_data import *
-from selection.algorithms.stab_lasso import *
-from selection.algorithms.lasso import instance
-from scipy.sparse import coo_matrix
 import numpy as np
+from scipy.sparse import coo_matrix
+
+from plot_simulated_data import *
+from stab_lasso import *
+
+
 
 # import pdb
 
@@ -46,26 +48,20 @@ def connectivity(size):
     connectivity = coo_matrix((data_sparse, (id_i, id_j)), (size**3, size**3))
     return connectivity
 
-def test(n_samples, n_split=1, split_ratio=1., mean_size_clust = 1, theta = 0.1, rs=0):
+def test(plot = False, n_samples= 100, n_split=1, split_ratio=1., mean_size_clust = 1, theta = 0.1, snr = -10, rs=0):
 
-
-    snr = -100
     size = 12
     size_split = int(split_ratio * n_samples)
     k = int(size ** 3 / mean_size_clust)
-    # lam = get_param(snr, n_samples, size)
-    # lam = lam/10.
-    # lam = 600.
-
     
     X, y, snr, noise, beta0, size = \
             create_simulation_data(snr, n_samples, size, rs)
     co = connectivity(size)
     true_coeff = [i for i in range(size**3) if beta0[i] != 0]
     
-    lam = theta * np.max(np.abs(np.dot(X.T, y)))/k
+    # lam = theta * np.max(np.abs(np.dot(X.T, y)))/k
     # print "Lambda : ", lam
-    B = stab_lasso(y, X, lam, n_split=n_split, size_split=size_split, k=k, connectivity=co)
+    B = stab_lasso(y, X, theta, n_split=n_split, size_split=size_split, k=k, connectivity=co)
     B.fit()
     # print ("Model fitted")
     #I = B.intervals
@@ -75,7 +71,11 @@ def test(n_samples, n_split=1, split_ratio=1., mean_size_clust = 1, theta = 0.1,
     pvals = B.split_pval()
 
     true_model = np.arange(size ** 3)[beta0 != 0]
-    selected_model = np.arange(size**3)[pvals != 1.]
+    #selected_model = np.arange(size**3)[pvals != 1.]
+    selected_model = B.select_model_fdr(0.1)
+
+    beta_corrected = np.zeros(size**3)
+    beta_corrected[selected_model] = beta[selected_model]
 
     falsediscovery = np.arange(size**3)[np.logical_and(pvals != 1.,beta0 == 0)]
     truediscovery = np.arange(size**3)[np.logical_and(pvals != 1., beta0 != 0)]
@@ -97,7 +97,25 @@ def test(n_samples, n_split=1, split_ratio=1., mean_size_clust = 1, theta = 0.1,
         print i, pvals[i]
     print "-----------------------------------------------"
     
-    
+    if plot:
+        # Create masks for SearchLight. process_mask is the voxels where SearchLight
+        # computation is performed. It is a subset of the brain mask, just to reduce
+        # computation time.
+        # mask = np.ones((size, size, size), np.bool)
+        # mask_img = nibabel.Nifti1Image(mask.astype(np.int), np.eye(4))
+        # process_mask = np.zeros((size, size, size), np.bool)
+        # process_mask[:, :, 0] = True
+        # process_mask[:, :, 5] = True
+        # process_mask[:, :, 11] = True
+        # process_mask_img = nibabel.Nifti1Image(process_mask.astype(np.int), np.eye(4))
+
+
+        coefs = np.reshape(beta0, [size, size, size])
+        coef_est = np.reshape(beta_corrected, [size, size, size])
+
+        plot_slices(coef_est, title="Ground truth")
+        plt.show()
+
     return B, beta_array, beta, pvals
 
 
