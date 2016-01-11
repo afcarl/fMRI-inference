@@ -206,7 +206,7 @@ class stab_lasso(object):
         clust_array = self._clust_array
 
         pvalues = np.ones((n_split, p))
-        n_perm = 1000
+        n_perm = 10000
 		
         for i in range(n_split):
             split = np.zeros(n, dtype='bool')

@@ -84,9 +84,10 @@ def test(model_selection='multivariate', plot = False, n_samples= 100, n_split=1
     beta_corrected = np.zeros(size**3)
     beta_corrected[selected_model] = beta[selected_model]
 
-    falsediscovery = np.arange(size**3)[np.logical_and(pvals != 1.,beta0 == 0)]
-    truediscovery = np.arange(size**3)[np.logical_and(pvals != 1., beta0 != 0)]
-    undiscovered = np.arange(size**3)[np.logical_and(pvals == 1., beta0 != 0)]
+    falsediscovery = selected_model[beta0[selected_model] == 0]
+    truediscovery = selected_model[beta0[selected_model] != 0]
+
+    undiscovered = len(true_coeff) - truediscovery.shape[0]
     fdr = float(falsediscovery.shape[0]) / max(1., float(selected_model.shape[0]))
 
 
@@ -94,7 +95,7 @@ def test(model_selection='multivariate', plot = False, n_samples= 100, n_split=1
     print "-----------------------------------------------"
     print "FDR : ", fdr
     print "DISCOVERED FEATURES : ", truediscovery.shape[0]
-    print "UNDISCOVERED FEATURES : ", undiscovered.shape[0]
+    print "UNDISCOVERED FEATURES : ", undiscovered
     print "-----------------------------------------------"
     print "TRUE DISCOVERY"
     for i in truediscovery:
