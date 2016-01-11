@@ -227,14 +227,14 @@ class stab_lasso(object):
             #beta_proj = np.dot(P, beta)
             #model_proj = (beta_proj != 0)
             #model_proj_size = model_proj.sum()
-            #X_test_proj = np.dot(P, X_test.T).T
+            X_test_proj = np.dot(P, X_test.T).T
 
             #X_model = X_test_proj[:, model_proj]
             #beta_model = beta_proj[model_proj]
 
             corr_perm = np.zeros((n_perm, n_clusters))
             for s in range(n_perm):
-                perm = np.random.permutation(n)
+                perm = np.random.permutation(n-size_split)
                 corr_perm[s,:] = np.dot(y_test.T, X_test_proj[perm,:])
             corr_perm = np.abs(corr_perm)	
             corr_true = np.abs(np.dot(y_test, X_test_proj).reshape((n_clusters)))
