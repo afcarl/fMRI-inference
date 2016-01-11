@@ -1,18 +1,7 @@
 import numpy as np
 from sklearn.linear_model import Lasso
-# from ..constraints.affine import (constraints, selection_interval,
-#                                  interval_constraints,
-#                                  sample_from_constraints,
-#                                  one_parameter_MLE,
-#                                  gibbs_test,
-#                                  stack)
-# from ..distributions.discrete_family import discrete_family
-
-# from lasso import lasso, instance
 
 from sklearn.cluster import AgglomerativeClustering
-
-# from scipy.stats import norm as ndist, t as tdist
 
 import statsmodels.api as sm
 
@@ -71,7 +60,7 @@ class stab_lasso(object):
 
         if n_clusters == None:
             n_clusters = p
-        self._n_clusters = k
+        self._n_clusters = n_clusters
         
         self.connectivity = connectivity
 
@@ -129,12 +118,10 @@ class stab_lasso(object):
                                                        connectivity)
             
             lam = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted)))
-
-            lasso_splitted = Lasso(alpha=lam)
+            alpha = lam/n
+            #alpha = 0.
+            lasso_splitted = Lasso(alpha=alpha)
             lasso_splitted.fit(X_proj, y_splitted)
-            #lasso_splitted = Lasso(y_splitted, X_proj, lam, sigma)
-
-            lasso_splitted.fit(sklearn_alpha, **lasso_args)
 
             beta_proj = lasso_splitted.coef_
             beta = np.dot(P_inv, beta_proj)
@@ -142,6 +129,7 @@ class stab_lasso(object):
             beta_array[i, :] = beta
             split_array[i, :] = split
             clust_array[i, :] = labels
+            #pdb.set_trace()
             
         beta = beta_array.mean(axis=0)
         # self._constraints = stack(*cons_list)
@@ -151,7 +139,7 @@ class stab_lasso(object):
         self._clust_array = clust_array
 
     
-    def split_pval(self):
+    def multivariate_split_pval(self):
         X = self.X
         y = self.y
         n, p = X.shape
@@ -181,7 +169,7 @@ class stab_lasso(object):
             s_array = P.sum(axis = 0)
             P = P/s_array
             
-            beta = beta_array[:, i]
+            beta = beta_array[i, :]
             beta_proj = np.dot(P, beta)
             model_proj = (beta_proj != 0)
             model_proj_size = model_proj.sum()
@@ -201,7 +189,64 @@ class stab_lasso(object):
         self._pvalues = pvalues
         self._pval_aggr = pvalues_aggr
         return pvalues_aggr
+	
+		
 
+
+    def univariate_split_pval(self):
+        X = self.X
+        y = self.y
+        n, p = X.shape
+        n_split = self.n_split
+        size_split = self.size_split
+        n_clusters = self._n_clusters
+		
+        beta_array = self._beta_array
+        split_array = self._split_array
+        clust_array = self._clust_array
+
+        pvalues = np.ones((n_split, p))
+        n_perm = 1000
+		
+        for i in range(n_split):
+            split = np.zeros(n, dtype='bool')
+            split[split_array[i,:]] = True
+            y_test = y[~split]
+            X_test = X[~split,:]
+            
+            clust = clust_array[i,:]
+            P = np.zeros((n_clusters, p))
+            for j in range(p):
+                P[clust[j] ,j] = 1.
+            P_inv = np.copy(P)
+            P_inv = P_inv.T
+            s_array = P.sum(axis = 0)
+            P = P/s_array
+            
+            #beta = beta_array[i, :]
+            #beta_proj = np.dot(P, beta)
+            #model_proj = (beta_proj != 0)
+            #model_proj_size = model_proj.sum()
+            #X_test_proj = np.dot(P, X_test.T).T
+
+            #X_model = X_test_proj[:, model_proj]
+            #beta_model = beta_proj[model_proj]
+
+            corr_perm = np.zeros((n_perm, n_clusters))
+            for s in range(n_perm):
+                perm = np.random.permutation(n)
+                corr_perm[s,:] = np.dot(y_test.T, X_test_proj[perm,:])
+            corr_perm = np.abs(corr_perm)	
+            corr_true = np.abs(np.dot(y_test, X_test_proj).reshape((n_clusters)))
+            
+
+            pvalues_proj = 1./n_perm * (corr_true < corr_perm).sum(axis=0)
+            pvalues[i, :] = np.dot(P_inv, pvalues_proj)
+
+        pvalues_aggr = pval_aggr(pvalues)
+        self._pvalues = pvalues
+        self._pval_aggr = pvalues_aggr
+        return pvalues_aggr
     
     def select_model_fwer(self, alpha):
         pvalues = self._pval_aggr

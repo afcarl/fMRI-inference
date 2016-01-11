@@ -1,3 +1,4 @@
+
 import numpy as np
 from scipy.sparse import coo_matrix
 
@@ -5,7 +6,7 @@ from plot_simulated_data import *
 from stab_lasso import *
 
 
-
+print "testmain"
 # import pdb
 
 
@@ -48,7 +49,7 @@ def connectivity(size):
     connectivity = coo_matrix((data_sparse, (id_i, id_j)), (size**3, size**3))
     return connectivity
 
-def test(plot = False, n_samples= 100, n_split=1, split_ratio=1., mean_size_clust = 1, theta = 0.1, snr = -10, rs=0):
+def test(plot = False, n_samples= 100, n_split=1, split_ratio=.4, mean_size_clust = 1, theta = 0.1, snr = -10, rs=0):
 
     size = 12
     size_split = int(split_ratio * n_samples)
@@ -61,14 +62,14 @@ def test(plot = False, n_samples= 100, n_split=1, split_ratio=1., mean_size_clus
     
     # lam = theta * np.max(np.abs(np.dot(X.T, y)))/k
     # print "Lambda : ", lam
-    B = stab_lasso(y, X, theta, n_split=n_split, size_split=size_split, k=k, connectivity=co)
+    B = stab_lasso(y, X, theta, n_split=n_split, size_split=size_split, n_clusters=k, connectivity=co)
     B.fit()
     # print ("Model fitted")
     #I = B.intervals
     # P = B.active_pvalues
     beta_array = B._beta_array
-    beta = B.soln
-    pvals = B.split_pval()
+    beta = B._soln
+    pvals = B.multivariate_split_pval()
 
     true_model = np.arange(size ** 3)[beta0 != 0]
     #selected_model = np.arange(size**3)[pvals != 1.]
