@@ -10,7 +10,7 @@ print "testmain"
 # import pdb
 
 
-def get_param(snr = 100, n_samples = 100, size = 12, n_iterations=100):
+def get_param(snr=100, n_samples=100, size=12, n_iterations=100):
     norm = []
     for i in range(n_iterations):
         if i % 10 == 0:
@@ -28,6 +28,7 @@ def get_param(snr = 100, n_samples = 100, size = 12, n_iterations=100):
 
 
 def connectivity(size):
+    """
     indices = np.arange(size ** 3).reshape((size, size, size))
     connectivity = []
     directions = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1],
@@ -48,6 +49,9 @@ def connectivity(size):
     data_sparse = np.ones(len(id_i))
     connectivity = coo_matrix((data_sparse, (id_i, id_j)),
                               (size ** 3, size ** 3))
+    """
+    from sklearn.feature_extraction import image
+    connectivity = image.grid_to_graph(n_x=size, n_y=size, n_z=size)
     return connectivity
 
 
@@ -87,7 +91,7 @@ def test(model_selection='multivariate',
     else:
         raise ValueError("This model selection method doesn't exist")
 
-    true_model = np.arange(size ** 3)[beta0 != 0]
+    true_model = np.where(beta0)[0]
     #selected_model = np.arange(size**3)[pvals != 1.]
 
     if model_selection == 'univariate':
@@ -98,34 +102,34 @@ def test(model_selection='multivariate',
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
         beta_corrected[selected_model] = beta[selected_model]
-        falsediscovery = selected_model[beta0[selected_model] == 0]
-        truediscovery = selected_model[beta0[selected_model] != 0]
+        false_discovery = selected_model[beta0[selected_model] == 0]
+        true_discovery = selected_model[beta0[selected_model] != 0]
     else:
-        falsediscovery = np.array([])
-        truediscovery  = np.array([])
+        false_discovery = np.array([])
+        true_discovery  = np.array([])
 
-    undiscovered = len(true_coeff) - truediscovery.shape[0]
+    undiscovered = len(true_coeff) - true_discovery.shape[0]
 
-    fdr = (float(falsediscovery.shape[0]) /
+    fdr = (float(false_discovery.shape[0]) /
            max(1., float(selected_model.shape[0])))
 
     if print_results:
-        print "------------------- RESULTS -------------------"
-        print "-----------------------------------------------"
-        print "FDR : ", fdr
-        print "DISCOVERED FEATURES : ", truediscovery.shape[0]
-        print "UNDISCOVERED FEATURES : ", undiscovered
-        print "-----------------------------------------------"
-        print "TRUE DISCOVERY"
-        print "| Feature ID |       p-value      |"
-        for i in truediscovery:
-            print "|   ", str(i).zfill(4), "   |  ", pvals[i], "  |"
-        print "-----------------------------------------------"
-        print "FALSE DISCOVERY"
-        print "| Feature ID |       p-value      |"
-        for i in falsediscovery:
-            print "|   ", str(i).zfill(4), "   |  ", pvals[i], "  |"
-        print "-----------------------------------------------"
+        print("------------------- RESULTS -------------------")
+        print("-----------------------------------------------")
+        print("FDR : ", fdr)
+        print("DISCOVERED FEATURES : ", true_discovery.shape[0])
+        print("UNDISCOVERED FEATURES : ", undiscovered)
+        print("-----------------------------------------------")
+        print("TRUE DISCOVERY")
+        print("| Feature ID |       p-value      |")
+        for i in true_discovery:
+            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
+        print("-----------------------------------------------")
+        print("FALSE DISCOVERY")
+        print("| Feature ID |       p-value      |")
+        for i in false_discovery:
+            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
+        print("-----------------------------------------------")
     if plot:
         # Create masks for SearchLight. process_mask is the voxels where SearchLight
         # computation is performed. It is a subset of the brain mask, just to reduce
@@ -155,11 +159,12 @@ def multiple_test(n_test,
                   mean_size_clust=1,
                   theta=0.1,
                   snr=-10,
-                  rs_start=0):
+                  rs_start=0,
+                  plot=False):
     fdr_array = []
     for i in range(n_test):
         if i % 10 == 0:
-            print i
+            print(i)
 
         fdr, _ = test(n_samples=n_samples,
                       n_split=n_split,
@@ -168,7 +173,8 @@ def multiple_test(n_test,
                       theta=theta,
                       snr=snr,
                       rs=rs_start + i,
-                      print_results=False)
+                      print_results=False,
+                      plot=plot)
         fdr_array.append(fdr)
     return fdr_array
 

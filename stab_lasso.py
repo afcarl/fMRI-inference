@@ -16,7 +16,7 @@ class stab_lasso(object):
 
     def __init__(self, y, X, theta, n_split=1, size_split=None,
                  n_clusters=None, connectivity=None):
-        r"""
+        """
 
         Parameters
         ----------
@@ -70,7 +70,7 @@ class stab_lasso(object):
         """
         n, p = X.shape
         ward = AgglomerativeClustering(
-            n_clusters = k, connectivity=connectivity)
+            n_clusters=k, connectivity=connectivity)
         ward.fit(X.T)
 
         labels = ward.labels_
