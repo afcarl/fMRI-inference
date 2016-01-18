@@ -49,7 +49,16 @@ def connectivity(size):
     connectivity = coo_matrix((data_sparse, (id_i, id_j)), (size**3, size**3))
     return connectivity
 
-def test(model_selection='multivariate', plot = False, n_samples= 100, n_split=1, split_ratio=.4, mean_size_clust = 1, theta = 0.1, snr = -10, rs=0):
+def test(model_selection='multivariate',
+         plot = False,
+         print_results = True,
+         n_samples= 100,
+         n_split=1,
+         split_ratio=.4,
+         mean_size_clust = 1,
+         theta = 0.1,
+         snr = -10,
+         rs=0):
 
     size = 12
     size_split = int(split_ratio * n_samples)
@@ -79,32 +88,42 @@ def test(model_selection='multivariate', plot = False, n_samples= 100, n_split=1
 
     true_model = np.arange(size ** 3)[beta0 != 0]
     #selected_model = np.arange(size**3)[pvals != 1.]
-    selected_model = B.select_model_fdr(0.1)
+
+    if model_selection == 'univariate':
+        selected_model = B.select_model_fdr(0.1)
+    elif model_selection == 'multivariate':
+        selected_model = B.select_model_fdr(0.1, normalize=False)
 
     beta_corrected = np.zeros(size**3)
-    beta_corrected[selected_model] = beta[selected_model]
-
-    falsediscovery = selected_model[beta0[selected_model] == 0]
-    truediscovery = selected_model[beta0[selected_model] != 0]
+    if len(selected_model) > 0:
+        beta_corrected[selected_model] = beta[selected_model]
+        falsediscovery = selected_model[beta0[selected_model] == 0]
+        truediscovery = selected_model[beta0[selected_model] != 0]
+    else:
+        falsediscovery = np.array([])
+        truediscovery  = np.array([])
 
     undiscovered = len(true_coeff) - truediscovery.shape[0]
     fdr = float(falsediscovery.shape[0]) / max(1., float(selected_model.shape[0]))
 
-
-    print "------------------- RESULTS -------------------"
-    print "-----------------------------------------------"
-    print "FDR : ", fdr
-    print "DISCOVERED FEATURES : ", truediscovery.shape[0]
-    print "UNDISCOVERED FEATURES : ", undiscovered
-    print "-----------------------------------------------"
-    print "TRUE DISCOVERY"
-    for i in truediscovery:
-        print i, pvals[i]
-    print "-----------------------------------------------"
-    print "FALSE DISCOVERY"
-    for i in falsediscovery:
-        print i, pvals[i]
-    print "-----------------------------------------------"
+    
+    if print_results:
+        print "------------------- RESULTS -------------------"
+        print "-----------------------------------------------"
+        print "FDR : ", fdr
+        print "DISCOVERED FEATURES : ", truediscovery.shape[0]
+        print "UNDISCOVERED FEATURES : ", undiscovered
+        print "-----------------------------------------------"
+        print "TRUE DISCOVERY"
+        print "| Feature ID |       p-value      |"
+        for i in truediscovery:
+            print "|   ", str(i).zfill(4), "   |  ", pvals[i], "  |"
+        print "-----------------------------------------------"
+        print "FALSE DISCOVERY"
+        print "| Feature ID |       p-value      |"
+        for i in falsediscovery:
+            print "|   ", str(i).zfill(4), "   |  ", pvals[i], "  |"
+        print "-----------------------------------------------"
     
     if plot:
         # Create masks for SearchLight. process_mask is the voxels where SearchLight
@@ -125,18 +144,32 @@ def test(model_selection='multivariate', plot = False, n_samples= 100, n_split=1
         plot_slices(coef_est, title="Ground truth")
         plt.show()
 
-    return B, beta_array, beta, pvals
+    return fdr, pvals
 
 
-def multiple_test(n_test):
-    beta_array = []
+def multiple_test(n_test,
+                  model_selection='multivariate',
+                  n_samples= 100,
+                  n_split=1,
+                  split_ratio=.4,
+                  mean_size_clust = 1,
+                  theta = 0.1,
+                  snr = -10,
+                  rs_start = 0):
+    fdr_array = []
     for i in range(n_test):
         if i % 10 == 0:
             print i
-        
-        beta_array.append(test(n_samples=150, n_split=50, split_ratio=0.8, rs=i))
-        
-    return beta_array
+        fdr, _ = test(n_samples=n_samples,
+                      n_split=n_split,
+                      split_ratio=split_ratio,
+                      mean_size_clust=mean_size_clust,
+                      theta=theta,
+                      snr=snr,
+                      rs = rs_start + i,
+                      print_results = False)
+        fdr_array.append(fdr)        
+    return fdr_array
     
     
 

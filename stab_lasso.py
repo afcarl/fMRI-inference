@@ -185,7 +185,11 @@ class stab_lasso(object):
 
             pvalues[i, :] = np.dot(P_inv, pvalues_proj)
 
-        pvalues_aggr = pval_aggr(pvalues)
+
+        if n_split > 1:
+            pvalues_aggr = pval_aggr(pvalues)
+        else:
+            pvalues_aggr = pvalues[0]
         self._pvalues = pvalues
         self._pval_aggr = pvalues_aggr
         return pvalues_aggr
@@ -237,13 +241,16 @@ class stab_lasso(object):
                 perm = np.random.permutation(n-size_split)
                 corr_perm[s,:] = np.dot(y_test.T, X_test_proj[perm,:])
             corr_perm = np.abs(corr_perm)	
-            corr_true = np.abs(np.dot(y_test, X_test_proj).reshape((n_clusters)))
+            corr_true = np.abs(np.dot(y_test.T, X_test_proj).reshape((n_clusters)))
             
 
             pvalues_proj = 1./n_perm * (corr_true < corr_perm).sum(axis=0)
             pvalues[i, :] = np.dot(P_inv, pvalues_proj)
 
-        pvalues_aggr = pval_aggr(pvalues)
+        if n_split > 1:
+            pvalues_aggr = pval_aggr(pvalues)
+        else:
+            pvalues_aggr = pvalues[0]
         self._pvalues = pvalues
         self._pval_aggr = pvalues_aggr
         return pvalues_aggr
@@ -254,12 +261,14 @@ class stab_lasso(object):
         model = np.array([i for i in range(p) if pvalues[i] < alpha])
         return model
 
-    def select_model_fdr(self, q):
+    def select_model_fdr(self, q, normalize=True):
         pvalues = self._pval_aggr
         p, = pvalues.shape
-        pvalues_sorted = np.sort(pvalues) / np.arange(1, p+1)
         #pdb.set_trace()
-        newq = q #* (1./2 + np.log(2))
+        pvalues_sorted = np.sort(pvalues) / np.arange(1, p+1)
+        newq = q /  np.log(p)
+        if normalize:
+            alpha = newq/p
         h = max(i for i in range(p) if pvalues_sorted[i] <= newq)
         bound = h * pvalues_sorted[h]
         model = np.array([i for i in range(p) if pvalues[i] < bound])
