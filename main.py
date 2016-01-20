@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.sparse import coo_matrix
+import matplotlib.pyplot as plt
 
-from plot_simulated_data import create_simulation_data
+from plot_simulated_data import create_simulation_data, plot_slices
 from stab_lasso import StabilityLasso
 
 
@@ -78,7 +79,6 @@ def test(model_selection='multivariate',
             print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
         print("-----------------------------------------------")
     if plot:
-        coefs = np.reshape(beta0, [size, size, size])
         coef_est = np.reshape(beta_corrected, [size, size, size])
         plot_slices(coef_est, title="Ground truth")
         plt.show()

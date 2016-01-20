@@ -5,9 +5,6 @@ from sklearn.cluster import FeatureAgglomeration, AgglomerativeClustering
 import statsmodels.api as sm
 
 
-DEBUG = False
-
-
 def projection(X, k, connectivity):
     """
     Take the data, and returns a matrix, to reduce the dimension
@@ -76,15 +73,17 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         pvalues[i] = np.dot(P_inv, pvalues_proj)
 
     if n_split > 1:
-        pvalues_aggr = pvalues_aggregation(pvalues)
+        pvalues_aggregated = pvalues_aggregation(pvalues)
     else:
-        pvalues_aggr = pvalues[0]
-    return pvalues, pvalues_aggr
+        pvalues_aggregated = pvalues[0]
+    return pvalues, pvalues_aggregated
 
 
-def univariate_split_val(X, y, n_split, size_split, n_clusters,
+def univariate_split_pval(X, y, n_split, size_split, n_clusters,
                          beta_array, split_array, clust_array):
-
+    """Univariate p-values computation
+    todo: replace permutations with analytical tests
+    """
     n, p = X.shape
     pvalues = np.ones((n_split, p))
     n_perm = 10000
@@ -111,10 +110,10 @@ def univariate_split_val(X, y, n_split, size_split, n_clusters,
         pvalues[i, :] = np.dot(P_inv, pvalues_proj)
 
     if n_split > 1:
-        pvalues_aggr = pvalues_aggregation(pvalues)
+        pvalues_aggregated = pvalues_aggregation(pvalues)
     else:
-        pvalues_aggr = pvalues[0]
-    return pvalues, pvalues_aggr
+        pvalues_aggregated = pvalues[0]
+    return pvalues, pvalues_aggregated
 
 
 def pvalues_aggregation(pvalues, gamma_min=0.05):
@@ -181,7 +180,7 @@ class StabilityLasso(object):
         self._n_clusters = n_clusters
         self.connectivity = connectivity
 
-    def fit(self, sklearn_alpha=None, **lasso_args):
+    def fit(self, **lasso_args):
         X = self.X
         y = self.y
         n, p = X.shape
@@ -222,35 +221,31 @@ class StabilityLasso(object):
         self._clust_array = clust_array
 
     def multivariate_split_pval(self):
-        pvalues, pvalues_aggr = multivariate_split_pval(
+        pvalues, pvalues_aggregated = multivariate_split_pval(
             self.X, self.y, self.n_split, self.size_split, self._n_clusters,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
-        self._pval_aggr = pvalues_aggr
-        return pvalues_aggr
+        self._pvalues_aggregated = pvalues_aggregated
+        return pvalues_aggregated
 
     def univariate_split_pval(self):
-        pvalues, pvalues_aggr = univariate_split_pval(
+        pvalues, pvalues_aggregated = univariate_split_pval(
             self.X, self.y, self.n_split, self.size_split, self._n_clusters,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
-        self._pval_aggr = pvalues_aggr
-        return pvalues_aggr
+        self._pvalues_aggregated = pvalues_aggregated
+        return pvalues_aggregated
 
     def select_model_fwer(self, alpha):
-        pvalues = self._pval_aggr
-        p, = pvalues.shape
-        model = np.array([i for i in range(p) if pvalues[i] < alpha])
-        return model
+        return np.where(self._pvalues_aggregated < alpha)[0]
 
     def select_model_fdr(self, q, normalize=True):
-        pvalues = self._pval_aggr
+        pvalues = self._pvalues_aggregated
         p, = pvalues.shape
         pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
         newq = q / np.log(p)
-        if normalize:
-            alpha = newq / p
-        h = max(i for i in range(p) if pvalues_sorted[i] <= newq)
+        if (pvalues_sorted > newq).all():
+            return []
+        h = np.where(pvalues_sorted <= newq)[0][-1]
         bound = h * pvalues_sorted[h]
-        model = np.array([i for i in range(p) if pvalues[i] < bound])
-        return model
+        return np.where(pvalues < bound)[0]
