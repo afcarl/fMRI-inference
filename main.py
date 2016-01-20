@@ -1,30 +1,8 @@
-
 import numpy as np
 from scipy.sparse import coo_matrix
 
-from plot_simulated_data import *
+from plot_simulated_data import create_simulation_data
 from stab_lasso import StabilityLasso
-
-
-print "testmain"
-# import pdb
-
-
-def get_param(snr=100, n_samples=100, size=12, n_iterations=100):
-    norm = []
-    for i in range(n_iterations):
-        if i % 10 == 0:
-            print i
-        X, y, snr, noise, beta0, size = \
-            create_simulation_data(snr=-10, n_samples=100, size=15,
-                                   random_state=i)
-        v = np.dot(X.T, y)
-        u = np.abs(v).max()
-        norm.append(u)
-
-    norm = sorted(norm)
-    lam = norm[(9 * n_iterations) / 10]
-    return lam
 
 
 def connectivity(size):
@@ -43,7 +21,7 @@ def test(model_selection='multivariate',
          theta=0.1,
          snr=-10,
          rs=0):
-    size = 12
+    size = 5
     size_split = int(split_ratio * n_samples)
     k = int(size ** 3 / mean_size_clust)
 

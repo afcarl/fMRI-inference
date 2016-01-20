@@ -31,6 +31,104 @@ def projection(X, k, connectivity):
     return P_inv, X_proj, labels
 
 
+def pp_inv(clust):
+    n_clusters = len(np.unique(clust))
+    p = clust.size
+    P = np.zeros((n_clusters, p))
+    P[clust, np.arange(p)] = 1.
+    P_inv = np.copy(P)
+    P_inv = P_inv.T
+    s_array = P.sum(axis=0)
+    P = P / s_array
+    return P, P_inv
+
+
+def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
+                            beta_array, split_array, clust_array):
+    """Main function to obtain p-values across splits """
+    n, p = X.shape
+    pvalues = np.ones((n_split, p))
+    for i in range(n_split):
+        # perform the split
+        split = np.zeros(n, dtype='bool')
+        split[split_array[i]] = True
+        y_test = y[~split]
+        X_test = X[~split]
+
+        # projection
+        P, P_inv = pp_inv(clust_array[i])
+
+        # get the support 
+        beta = beta_array[i]
+        beta_proj = np.dot(P, beta)
+        # this is very awkward
+        model_proj = (beta_proj ** 2 > 0)
+        model_proj_size = model_proj.sum()
+        X_test_proj = np.dot(P, X_test.T).T
+        X_model = X_test_proj[:, model_proj]
+
+        # fit the model on test data to get p-values
+        res = sm.OLS(y_test, X_model).fit()
+        pvalues_proj = np.ones(n_clusters)
+        pvalues_proj[model_proj] = np.clip(
+            model_proj_size * res.pvalues, 0., 1.)
+
+        pvalues[i] = np.dot(P_inv, pvalues_proj)
+
+    if n_split > 1:
+        pvalues_aggr = pvalues_aggregation(pvalues)
+    else:
+        pvalues_aggr = pvalues[0]
+    return pvalues, pvalues_aggr
+
+
+def univariate_split_val(X, y, n_split, size_split, n_clusters,
+                         beta_array, split_array, clust_array):
+
+    n, p = X.shape
+    pvalues = np.ones((n_split, p))
+    n_perm = 10000
+    for i in range(n_split):
+        split = np.zeros(n, dtype='bool')
+        split[split_array[i]] = True
+        y_test = y[~split]
+        X_test = X[~split]
+
+        # projection
+        P, P_inv = pp_inv(clust_array[i])
+
+        X_test_proj = np.dot(P, X_test.T).T
+        corr_perm = np.zeros((n_perm, n_clusters))
+        for s in range(n_perm):
+            perm = np.random.permutation(n - size_split)
+            corr_perm[s] = np.dot(y_test.T, X_test_proj[perm])
+
+        corr_perm = np.abs(corr_perm)
+        corr_true = np.abs(np.dot(y_test.T, X_test_proj).reshape(
+                (n_clusters)))
+
+        pvalues_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
+        pvalues[i, :] = np.dot(P_inv, pvalues_proj)
+
+    if n_split > 1:
+        pvalues_aggr = pvalues_aggregation(pvalues)
+    else:
+        pvalues_aggr = pvalues[0]
+    return pvalues, pvalues_aggr
+
+
+def pvalues_aggregation(pvalues, gamma_min=0.05):
+    n_split, p = pvalues.shape
+    kmin = max(1, int(gamma_min * n_split))
+    pvalues_sorted = np.sort(pvalues, axis=0)[kmin:]
+    gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
+    pvalues_sorted = pvalues_sorted / gamma_array[:, np.newaxis]
+    q = pvalues_sorted.min(axis=0)
+    q *= 1 - np.log(gamma_min)
+    q = q.clip(0., 1.)
+    return q
+
+
 class StabilityLasso(object):
 
     alpha = 0.05
@@ -123,115 +221,18 @@ class StabilityLasso(object):
         self._split_array = split_array
         self._clust_array = clust_array
 
-
     def multivariate_split_pval(self):
-        X = self.X
-        y = self.y
-        n, p = X.shape
-        n_split = self.n_split
-        size_split = self.size_split
-        n_clusters = self._n_clusters
-
-        beta_array = self._beta_array
-        split_array = self._split_array
-        clust_array = self._clust_array
-
-        pvalues = np.ones((n_split, p))
-
-        for i in range(n_split):
-            split = np.zeros(n, dtype='bool')
-            split[split_array[i]] = True
-            y_test = y[~split]
-            X_test = X[~split]
-
-            clust = clust_array[i]
-            P = np.zeros((n_clusters, p))
-            for j in range(p):
-                P[clust[j], j] = 1.
-            P_inv = np.copy(P)
-            P_inv = P_inv.T
-            s_array = P.sum(axis=0)
-            P = P / s_array
-
-            beta = beta_array[i, :]
-            beta_proj = np.dot(P, beta)
-            model_proj = (beta_proj != 0)
-            model_proj_size = model_proj.sum()
-            X_test_proj = np.dot(P, X_test.T).T
-
-            X_model = X_test_proj[:, model_proj]
-            beta_model = beta_proj[model_proj]
-
-            res = sm.OLS(y_test, X_model).fit()
-            pvalues_proj = np.ones(n_clusters)
-            pvalues_proj[model_proj] = np.clip(
-                model_proj_size * res.pvalues, 0., 1.)
-
-            pvalues[i, :] = np.dot(P_inv, pvalues_proj)
-
-        if n_split > 1:
-            pvalues_aggr = pval_aggr(pvalues)
-        else:
-            pvalues_aggr = pvalues[0]
+        pvalues, pvalues_aggr = multivariate_split_pval(
+            self.X, self.y, self.n_split, self.size_split, self._n_clusters,
+            self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pval_aggr = pvalues_aggr
         return pvalues_aggr
 
     def univariate_split_pval(self):
-        X = self.X
-        y = self.y
-        n, p = X.shape
-        n_split = self.n_split
-        size_split = self.size_split
-        n_clusters = self._n_clusters
-
-        beta_array = self._beta_array
-        split_array = self._split_array
-        clust_array = self._clust_array
-
-        pvalues = np.ones((n_split, p))
-        n_perm = 10000
-
-        for i in range(n_split):
-            split = np.zeros(n, dtype='bool')
-            split[split_array[i]] = True
-            y_test = y[~split]
-            X_test = X[~split]
-
-            clust = clust_array[i]
-            P = np.zeros((n_clusters, p))
-            for j in range(p):
-                P[clust[j], j] = 1.
-            P_inv = np.copy(P)
-            P_inv = P_inv.T
-            s_array = P.sum(axis = 0)
-            P = P / s_array
-
-            #beta = beta_array[i, :]
-            #beta_proj = np.dot(P, beta)
-            #model_proj = (beta_proj != 0)
-            #model_proj_size = model_proj.sum()
-            X_test_proj = np.dot(P, X_test.T).T
-
-            #X_model = X_test_proj[:, model_proj]
-            #beta_model = beta_proj[model_proj]
-
-            corr_perm = np.zeros((n_perm, n_clusters))
-            for s in range(n_perm):
-                perm = np.random.permutation(n - size_split)
-                corr_perm[s] = np.dot(y_test.T, X_test_proj[perm])
-
-            corr_perm = np.abs(corr_perm)
-            corr_true = np.abs(np.dot(y_test.T, X_test_proj).reshape(
-                    (n_clusters)))
-
-            pvalues_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
-            pvalues[i, :] = np.dot(P_inv, pvalues_proj)
-
-        if n_split > 1:
-            pvalues_aggr = pval_aggr(pvalues)
-        else:
-            pvalues_aggr = pvalues[0]
+        pvalues, pvalues_aggr = univariate_split_pval(
+            self.X, self.y, self.n_split, self.size_split, self._n_clusters,
+            self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pval_aggr = pvalues_aggr
         return pvalues_aggr
@@ -245,7 +246,6 @@ class StabilityLasso(object):
     def select_model_fdr(self, q, normalize=True):
         pvalues = self._pval_aggr
         p, = pvalues.shape
-        #pdb.set_trace()
         pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
         newq = q / np.log(p)
         if normalize:
@@ -254,16 +254,3 @@ class StabilityLasso(object):
         bound = h * pvalues_sorted[h]
         model = np.array([i for i in range(p) if pvalues[i] < bound])
         return model
-
-
-def pval_aggr(pvalues, gamma_min=0.05):
-    n_split, p = pvalues.shape
-
-    kmin = max(1, int(gamma_min * n_split))
-    pvalues_sorted = np.sort(pvalues, axis=0)[kmin:]
-    gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
-    pvalues_sorted = pvalues_sorted  / gamma_array[:, np.newaxis]
-    q = pvalues_sorted.min(axis=0)
-    q *= 1 - np.log(gamma_min)
-    q = q.clip(0., 1.)
-    return q
