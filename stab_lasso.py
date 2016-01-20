@@ -1,20 +1,41 @@
 import numpy as np
 from sklearn.linear_model import Lasso
-from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import FeatureAgglomeration, AgglomerativeClustering
 
 import statsmodels.api as sm
 
 
 DEBUG = False
 
-import pdb
+
+def projection(X, k, connectivity):
+    """
+    Take the data, and returns a matrix, to reduce the dimension
+    Returns, invP, (P.(X.T)).T and the underlying labels
+    """
+    n, p = X.shape
+    ward = FeatureAgglomeration(
+        linkage='ward', n_clusters=k, connectivity=connectivity)
+    ward.fit(X)
+    #
+    labels = ward.labels_
+    P = np.zeros((k, p))
+    P[labels, np.arange(p)] = 1
+    P_inv = P.copy().T
+    s_array = P.sum(axis=0)
+    P = P / s_array
+    X_proj = P.dot(X.T).T
+    # should be done through ward.transform, but there is an issue
+    # with the normalization
+    # X_proj = ward.transform(X)
+    return P_inv, X_proj, labels
 
 
-class stab_lasso(object):
+class StabilityLasso(object):
 
     alpha = 0.05
 
-    def __init__(self, y, X, theta, n_split=1, size_split=None,
+    def __init__(self, y, X, theta, n_split=100, size_split=None,
                  n_clusters=None, connectivity=None):
         """
 
@@ -62,30 +83,6 @@ class stab_lasso(object):
         self._n_clusters = n_clusters
         self.connectivity = connectivity
 
-    @staticmethod
-    def projection(X, k, connectivity):
-        """
-        Take the data, and returns a matrix, to reduce the dimension
-        Returns, P, invP, (P.(X.T)).T
-        """
-        n, p = X.shape
-        ward = AgglomerativeClustering(
-            n_clusters=k, connectivity=connectivity)
-        ward.fit(X.T)
-
-        labels = ward.labels_
-        P = np.zeros((k, p))
-        for i in range(p):
-            P[labels[i], i] = 1.
-        P_inv = np.copy(P)
-        P_inv = P_inv.T
-        s_array = P.sum(axis=0)
-        P = P / s_array
-
-        # P_inv = np.linalg.pinv(P)
-        X_proj = np.dot(P, X.T).T
-        return P, P_inv, X_proj, labels
-
     def fit(self, sklearn_alpha=None, **lasso_args):
         X = self.X
         y = self.y
@@ -101,30 +98,26 @@ class stab_lasso(object):
         clust_array = np.zeros((n_split, p), dtype=int)
 
         for i in range(n_split):
-            split = np.random.choice(n, size_split, replace = False)
+            split = np.random.choice(n, size_split, replace=False)
             split.sort()
 
             y_splitted, X_splitted = y[split], X[split]
 
-            P, P_inv, X_proj, labels = self.projection(
+            P_inv, X_proj, labels = projection(
                 X_splitted, n_clusters, connectivity)
 
-            lam = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted)))
-            alpha = lam / n
-            #alpha = 0.
+            alpha = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted))) / n
             lasso_splitted = Lasso(alpha=alpha)
             lasso_splitted.fit(X_proj, y_splitted)
 
             beta_proj = lasso_splitted.coef_
             beta = np.dot(P_inv, beta_proj)
 
-            beta_array[i, :] = beta
-            split_array[i, :] = split
-            clust_array[i, :] = labels
-            #pdb.set_trace()
+            beta_array[i] = beta
+            split_array[i] = split
+            clust_array[i] = labels
 
         beta = beta_array.mean(axis=0)
-        # self._constraints = stack(*cons_list)
         self._soln = beta
         self._beta_array = beta_array
         self._split_array = split_array
@@ -170,13 +163,11 @@ class stab_lasso(object):
             beta_model = beta_proj[model_proj]
 
             res = sm.OLS(y_test, X_model).fit()
-            #pdb.set_trace()
             pvalues_proj = np.ones(n_clusters)
             pvalues_proj[model_proj] = np.clip(
                 model_proj_size * res.pvalues, 0., 1.)
 
             pvalues[i, :] = np.dot(P_inv, pvalues_proj)
-
 
         if n_split > 1:
             pvalues_aggr = pval_aggr(pvalues)
