@@ -8,17 +8,10 @@ imaging data and applies machine learning techniques to predict output
 values.
 """
 
-# Licence : BSD
-
-#print(__doc__)
-
-from time import time
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import linalg, ndimage
 
-from sklearn import linear_model, svm
 from sklearn.utils import check_random_state
 
 import nibabel
@@ -73,8 +66,9 @@ def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1):
 def plot_slices(data, title=None):
     plt.figure(figsize=(5.5, 5.5))
     vmax = np.abs(data).max()
-    for i in range(12):
-        plt.subplot(4, 3, i + 1)
+    n_slices = data.shape[2]
+    for i in range(n_slices):
+        plt.subplot(np.ceil(float(n_slices) / 3), 3, i + 1)
         plt.imshow(data[:, :, i], vmin=-vmax, vmax=vmax,
                   interpolation="nearest", cmap=plt.cm.RdBu_r)
         plt.xticks(())

@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.linear_model import Lasso
 from sklearn.cluster import FeatureAgglomeration, AgglomerativeClustering
+from sklearn.utils import check_random_state
 
 import statsmodels.api as sm
 
@@ -133,7 +134,7 @@ class StabilityLasso(object):
     alpha = 0.05
 
     def __init__(self, y, X, theta, n_split=100, size_split=None,
-                 n_clusters=None, connectivity=None):
+                 n_clusters=None, connectivity=None, random_state=1):
         """
 
         Parameters
@@ -179,6 +180,7 @@ class StabilityLasso(object):
             n_clusters = p
         self._n_clusters = n_clusters
         self.connectivity = connectivity
+        self.generator = check_random_state(random_state)
 
     def fit(self, **lasso_args):
         X = self.X
@@ -195,7 +197,7 @@ class StabilityLasso(object):
         clust_array = np.zeros((n_split, p), dtype=int)
 
         for i in range(n_split):
-            split = np.random.choice(n, size_split, replace=False)
+            split = self.generator.choice(n, size_split, replace=False)
             split.sort()
 
             y_splitted, X_splitted = y[split], X[split]
@@ -237,7 +239,7 @@ class StabilityLasso(object):
         return pvalues_aggregated
 
     def select_model_fwer(self, alpha):
-        return np.where(self._pvalues_aggregated < alpha)[0]
+        return self._pvalues_aggregated < alpha
 
     def select_model_fdr(self, q, normalize=True):
         pvalues = self._pvalues_aggregated
@@ -248,4 +250,4 @@ class StabilityLasso(object):
             return []
         h = np.where(pvalues_sorted <= newq)[0][-1]
         bound = h * pvalues_sorted[h]
-        return np.where(pvalues < bound)[0]
+        return pvalues < bound

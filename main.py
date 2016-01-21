@@ -21,17 +21,19 @@ def test(model_selection='multivariate',
          mean_size_clust=1,
          theta=0.1,
          snr=-10,
-         rs=0):
-    size = 5
+         rs=1,
+         alpha=.05):
+    size = 6
     size_split = int(split_ratio * n_samples)
     k = int(size ** 3 / mean_size_clust)
 
     X, y, snr, noise, beta0, size = \
         create_simulation_data(snr, n_samples, size, rs)
-    co = connectivity(size)
-    true_coeff = [i for i in range(size ** 3) if beta0[i] != 0]
+
+    connectivity_ = connectivity(size)
+    true_coeff = beta0 ** 2 > 0
     B = StabilityLasso(y, X, theta, n_split=n_split, size_split=size_split,
-                       n_clusters=k, connectivity=co)
+                       n_clusters=k, connectivity=connectivity_)
     B.fit()
     beta = B._soln
 
@@ -43,23 +45,26 @@ def test(model_selection='multivariate',
         raise ValueError("This model selection method doesn't exist")
 
     if model_selection == 'univariate':
-        selected_model = B.select_model_fdr(0.1)
+        selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
-        selected_model = B.select_model_fdr(0.1, normalize=False)
+        selected_model = B.select_model_fdr(alpha, normalize=False)
 
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
         beta_corrected[selected_model] = beta[selected_model]
-        false_discovery = selected_model[beta0[selected_model] == 0]
-        true_discovery = selected_model[beta0[selected_model] != 0]
+        false_discovery = selected_model * (~true_coeff)
+        true_discovery = selected_model * true_coeff
     else:
         false_discovery = np.array([])
         true_discovery  = np.array([])
 
-    undiscovered = len(true_coeff) - true_discovery.shape[0]
+    undiscovered = true_coeff.sum() - true_discovery.sum()
 
-    fdr = (float(false_discovery.shape[0]) /
-           max(1., float(selected_model.shape[0])))
+    fdr = (float(false_discovery.sum()) /
+           max(1., float(selected_model.sum())))
+
+    recall = float(true_discovery.sum()) / np.sum(true_coeff)
+    print(1 - fdr, recall)
 
     if print_results:
         print("------------------- RESULTS -------------------")
@@ -80,39 +85,44 @@ def test(model_selection='multivariate',
         print("-----------------------------------------------")
     if plot:
         coef_est = np.reshape(beta_corrected, [size, size, size])
-        plot_slices(coef_est, title="Ground truth")
+        plot_slices(coef_est, title="Estimated")
+        plot_slices(np.reshape(true_coeff, (size, size, size)),
+                    title="Ground truth")
         plt.show()
 
-    return fdr, pvals
+    return fdr, recall, pvals
 
 
 def multiple_test(n_test,
                   model_selection='multivariate',
                   n_samples=100,
-                  n_split=1,
+                  n_split=30,
                   split_ratio=.4,
                   mean_size_clust=1,
                   theta=0.1,
                   snr=-10,
-                  rs_start=0,
+                  rs_start=1,
                   plot=False):
     fdr_array = []
-    for i in range(n_test):
-        if i % 10 == 0:
-            print(i)
+    recall_array = []
 
-        fdr, _ = test(n_samples=n_samples,
-                      n_split=n_split,
-                      split_ratio=split_ratio,
-                      mean_size_clust=mean_size_clust,
-                      theta=theta,
-                      snr=snr,
-                      rs=rs_start + i,
-                      print_results=False,
-                      plot=plot)
+    for i in range(n_test):
+        fdr, recall, _ = test(n_samples=n_samples,
+                              n_split=n_split,
+                              split_ratio=split_ratio,
+                              mean_size_clust=mean_size_clust,
+                              theta=theta,
+                              snr=snr,
+                              rs=rs_start + i,
+                              print_results=False,
+                              plot=plot)
         fdr_array.append(fdr)
-    return fdr_array
+        recall_array.append(recall)
+    return fdr_array, recall_array
 
 
 if __name__ == '__main__':
-    print(multiple_test(10))
+    fdr_array, recall_array = multiple_test(
+        n_test=30, n_split=30, mean_size_clust=1, split_ratio=.4, plot=False)
+    print('average fdr:', np.mean(fdr_array))
+    print('average recall:', np.mean(recall_array))
