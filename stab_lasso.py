@@ -133,19 +133,13 @@ class StabilityLasso(object):
 
     alpha = 0.05
 
-    def __init__(self, y, X, theta, n_split=100, size_split=None,
-                 n_clusters=None, connectivity=None, random_state=1):
+    def __init__(self, theta, n_split=100, ratio_split=.5,
+                 n_clusters='auto', model_selection='multivariate', 
+                 random_state=1):
         """
 
         Parameters
         ----------
-
-        y : np.float(y)
-            The target, in the model $y = X\beta$
-
-        X : np.float((n, p))
-            The data, in the model $y = X\beta$
-
         theta : np.float
             Coefficient factor of the L-1 penalty in
             $\text{minimize}_{\beta} \frac{1}{2} \|y_{splitted}-X_{clustered,split}\beta\|^2_2 + 
@@ -155,8 +149,8 @@ class StabilityLasso(object):
         n_split : int
             Number of time we randomize the data
 
-        size_split : int
-            Size of the first part of the we are doing the selection on
+        ratio_split : float, optional
+            Relative size of the first part (selection). Defaults to .5.
 
         n_clusters : int
             Number of clusters in the clustering.
@@ -165,45 +159,44 @@ class StabilityLasso(object):
         connectivity : np.array(p,p)
             Connectivity matrix of the data, used for the spatial clustering
 
+        model_selection: string, optional
         """
-        self.y = y
-        self.X = X
-        n, p = X.shape
         self.theta = theta
         self.n_split = n_split
-
-        if size_split is None:
-            size_split = n
-        self.size_split = size_split
-
-        if n_clusters is None:
-            n_clusters = p
-        self._n_clusters = n_clusters
-        self.connectivity = connectivity
+        self.ratio_split = ratio_split
         self.generator = check_random_state(random_state)
+        self.n_clusters = n_clusters
 
-    def fit(self, **lasso_args):
-        X = self.X
-        y = self.y
+    def fit(self, X, y, connectivity=None, **lasso_args):
+        """
+
+        y : np.float(y)
+            The target, in the model $y = X\beta$
+
+        X : np.float((n, p))
+            The data, in the model $y = X\beta$
+
+
+        """
         n, p = X.shape
         n_split = self.n_split
-        size_split = self.size_split
-        n_clusters = self._n_clusters
-        connectivity = self.connectivity
+        self.size_split = n * self.ratio_split
+        if self.n_clusters == 'auto':
+            self.n_clusters = p
         theta = self.theta
 
         beta_array = np.zeros((n_split, p))
-        split_array = np.zeros((n_split, size_split), dtype=int)
+        split_array = np.zeros((n_split, self.size_split), dtype=int)
         clust_array = np.zeros((n_split, p), dtype=int)
 
         for i in range(n_split):
-            split = self.generator.choice(n, size_split, replace=False)
+            split = self.generator.choice(n, self.size_split, replace=False)
             split.sort()
 
             y_splitted, X_splitted = y[split], X[split]
 
             P_inv, X_proj, labels = projection(
-                X_splitted, n_clusters, connectivity)
+                X_splitted, self.n_clusters, connectivity)
 
             alpha = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted))) / n
             lasso_splitted = Lasso(alpha=alpha)
@@ -221,18 +214,19 @@ class StabilityLasso(object):
         self._beta_array = beta_array
         self._split_array = split_array
         self._clust_array = clust_array
+        return self
 
-    def multivariate_split_pval(self):
+    def multivariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = multivariate_split_pval(
-            self.X, self.y, self.n_split, self.size_split, self._n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pvalues_aggregated = pvalues_aggregated
         return pvalues_aggregated
 
-    def univariate_split_pval(self):
+    def univariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = univariate_split_pval(
-            self.X, self.y, self.n_split, self.size_split, self._n_clusters,
+            self.X, self.y, self.n_split, self.size_split, self.n_clusters,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pvalues_aggregated = pvalues_aggregated
@@ -247,7 +241,8 @@ class StabilityLasso(object):
         pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
         newq = q / np.log(p)
         if (pvalues_sorted > newq).all():
-            return []
-        h = np.where(pvalues_sorted <= newq)[0][-1]
-        bound = h * pvalues_sorted[h]
+            bound = 0
+        else:
+            h = np.where(pvalues_sorted <= newq)[0][-1]
+            bound = pvalues_sorted[h] * h
         return pvalues < bound

@@ -24,7 +24,7 @@ def test(model_selection='multivariate',
          rs=1,
          alpha=.05):
     size = 6
-    size_split = int(split_ratio * n_samples)
+
     k = int(size ** 3 / mean_size_clust)
 
     X, y, snr, noise, beta0, size = \
@@ -32,21 +32,22 @@ def test(model_selection='multivariate',
 
     connectivity_ = connectivity(size)
     true_coeff = beta0 ** 2 > 0
-    B = StabilityLasso(y, X, theta, n_split=n_split, size_split=size_split,
-                       n_clusters=k, connectivity=connectivity_)
-    B.fit()
+    B = StabilityLasso(theta, n_split=n_split, ratio_split=split_ratio,
+                       n_clusters=k, model_selection=model_selection)
+    B.fit(X, y, connectivity_)
     beta = B._soln
 
     if model_selection == 'univariate':
         pvals = B.univariate_split_pval()
     elif model_selection == 'multivariate':
-        pvals = B.multivariate_split_pval()
+        pvals = B.multivariate_split_pval(X, y)
     else:
         raise ValueError("This model selection method doesn't exist")
 
     if model_selection == 'univariate':
         selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
+        # selected_model = B.select_model_fwer(alpha)
         selected_model = B.select_model_fdr(alpha, normalize=False)
 
     beta_corrected = np.zeros(size ** 3)
@@ -64,7 +65,8 @@ def test(model_selection='multivariate',
            max(1., float(selected_model.sum())))
 
     recall = float(true_discovery.sum()) / np.sum(true_coeff)
-    print(1 - fdr, recall)
+
+    print np.sum(false_discovery)
 
     if print_results:
         print("------------------- RESULTS -------------------")
@@ -123,6 +125,6 @@ def multiple_test(n_test,
 
 if __name__ == '__main__':
     fdr_array, recall_array = multiple_test(
-        n_test=30, n_split=30, mean_size_clust=1, split_ratio=.4, plot=False)
+        n_test=100, n_split=30, mean_size_clust=6, split_ratio=.4, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
