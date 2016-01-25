@@ -23,7 +23,7 @@ def test(model_selection='multivariate',
          snr=-10,
          rs=1,
          alpha=.05):
-    size = 6
+    size = 12
 
     k = int(size ** 3 / mean_size_clust)
 
@@ -48,7 +48,7 @@ def test(model_selection='multivariate',
         selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
         # selected_model = B.select_model_fwer(alpha)
-        selected_model = B.select_model_fdr(alpha, normalize=False)
+        selected_model = B.select_model_fdr(alpha)
 
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
@@ -120,11 +120,12 @@ def multiple_test(n_test,
                               plot=plot)
         fdr_array.append(fdr)
         recall_array.append(recall)
-    return fdr_array, recall_array
+    return np.array(fdr_array), np.array(recall_array)
 
 
 if __name__ == '__main__':
     fdr_array, recall_array = multiple_test(
-        n_test=100, n_split=30, mean_size_clust=6, split_ratio=.4, plot=False)
+        n_test=30, n_split=30, mean_size_clust=16, split_ratio=.5, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
+    print('fwer:', np.mean(fdr_array > 0))

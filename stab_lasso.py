@@ -129,6 +129,18 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     return q
 
 
+def select_model_fdr(pvalues, q):
+    p, = pvalues.shape
+    pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
+    newq = q / np.log(p)
+    if (pvalues_sorted > newq).all():
+        bound = 0
+    else:
+        h = np.where(pvalues_sorted <= newq)[0][-1]
+        bound = pvalues_sorted[h] * (h + 1)
+    return pvalues < bound
+
+
 class StabilityLasso(object):
 
     alpha = 0.05
@@ -236,13 +248,4 @@ class StabilityLasso(object):
         return self._pvalues_aggregated < alpha
 
     def select_model_fdr(self, q, normalize=True):
-        pvalues = self._pvalues_aggregated
-        p, = pvalues.shape
-        pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
-        newq = q / np.log(p)
-        if (pvalues_sorted > newq).all():
-            bound = 0
-        else:
-            h = np.where(pvalues_sorted <= newq)[0][-1]
-            bound = pvalues_sorted[h] * h
-        return pvalues < bound
+        return (select_model_fdr(self._pvalues_aggregated, q)
