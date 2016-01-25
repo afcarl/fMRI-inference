@@ -5,6 +5,7 @@ from scipy.sparse import coo_matrix
 from plot_simulated_data import *
 from stab_lasso import *
 
+import matplotlib.pyplot as plt
 
 print "testmain"
 # import pdb
@@ -28,28 +29,6 @@ def get_param(snr=100, n_samples=100, size=12, n_iterations=100):
 
 
 def connectivity(size):
-    """
-    indices = np.arange(size ** 3).reshape((size, size, size))
-    connectivity = []
-    directions = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1],
-                           [-1, 0, 0], [0, -1, 0], [0, 0, -1]])
-
-    for u in range(size):
-        for v in range(size):
-            for w in range(size):
-                neighbors = directions + np.array([u, v, w])
-                neighbors = [t for t in neighbors
-                             if (np.all(t < size) and np.all(t >= 0))]
-                id_neighbors = [indices[tuple(n)] for n in neighbors]
-                connectivity.append(id_neighbors)
-
-    id_i = [c for c in range(len(connectivity))
-            for f in range(len(connectivity[c]))]
-    id_j = [f for c in connectivity for f in c ]
-    data_sparse = np.ones(len(id_i))
-    connectivity = coo_matrix((data_sparse, (id_i, id_j)),
-                              (size ** 3, size ** 3))
-    """
     from sklearn.feature_extraction import image
     connectivity = image.grid_to_graph(n_x=size, n_y=size, n_z=size)
     return connectivity
@@ -57,6 +36,7 @@ def connectivity(size):
 
 def test(model_selection='multivariate',
          plot=False,
+         plot_roc=False,
          print_results=True,
          n_samples=100,
          n_split=1,
@@ -66,21 +46,20 @@ def test(model_selection='multivariate',
          snr=-10,
          rs=0):
     size = 12
+    p = size **3
     size_split = int(split_ratio * n_samples)
-    k = int(size ** 3 / mean_size_clust)
+    k = int(p / mean_size_clust)
 
     X, y, snr, noise, beta0, size = \
         create_simulation_data(snr, n_samples, size, rs)
     co = connectivity(size)
-    true_coeff = [i for i in range(size ** 3) if beta0[i] != 0]
+    true_coeff = [i for i in range(p) if beta0[i] != 0]
     # lam = theta * np.max(np.abs(np.dot(X.T, y)))/k
     # print "Lambda : ", lam
     B = stab_lasso(y, X, theta, n_split=n_split, size_split=size_split,
                    n_clusters=k, connectivity=co)
     B.fit()
-    # print ("Model fitted")
-    #I = B.intervals
-    # P = B.active_pvalues
+    
     beta_array = B._beta_array
     beta = B._soln
 
@@ -92,14 +71,15 @@ def test(model_selection='multivariate',
         raise ValueError("This model selection method doesn't exist")
 
     true_model = np.where(beta0)[0]
-    #selected_model = np.arange(size**3)[pvals != 1.]
+    true_model_bool = np.zeros(p, dtype=bool)
+    true_model_bool[true_model] = True
 
     if model_selection == 'univariate':
-        selected_model = B.select_model_fdr(0.1)
+        selected_model = select_model_fdr(pvals, 0.1)
     elif model_selection == 'multivariate':
-        selected_model = B.select_model_fdr(0.1, normalize=False)
+        selected_model = select_model_fdr(pvals, 0.1, normalize=False)
 
-    beta_corrected = np.zeros(size ** 3)
+    beta_corrected = np.zeros(p)
     if len(selected_model) > 0:
         beta_corrected[selected_model] = beta[selected_model]
         false_discovery = selected_model[beta0[selected_model] == 0]
@@ -117,18 +97,18 @@ def test(model_selection='multivariate',
         print("------------------- RESULTS -------------------")
         print("-----------------------------------------------")
         print("FDR : ", fdr)
-        print("DISCOVERED FEATURES : ", true_discovery.shape[0])
-        print("UNDISCOVERED FEATURES : ", undiscovered)
+        print("DISCOVERED FEATURES : "+ str(true_discovery.shape[0]))
+        print("UNDISCOVERED FEATURES : "+ str(undiscovered))
         print("-----------------------------------------------")
         print("TRUE DISCOVERY")
         print("| Feature ID |       p-value      |")
         for i in true_discovery:
-            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
+            print("|    "+ str(i).zfill(4)+ "    |   "+ str(pvals[i])+ "   |")
         print("-----------------------------------------------")
         print("FALSE DISCOVERY")
         print("| Feature ID |       p-value      |")
         for i in false_discovery:
-            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
+            print("|    "+ str(i).zfill(4)+ "    |   "+ str(pvals[i])+ "   |")
         print("-----------------------------------------------")
     if plot:
         # Create masks for SearchLight. process_mask is the voxels where SearchLight
@@ -148,9 +128,42 @@ def test(model_selection='multivariate',
         plot_slices(coef_est, title="Ground truth")
         plt.show()
 
+    if plot_roc:
+        
+        if model_selection == 'univariate':
+            model_bounds = np.sort(select_model_fdr_bounds(pvals))
+        elif model_selection == 'multivariate':
+            model_bounds = np.sort(select_model_fdr_bounds(pvals, normalize=False))
+
+        plt_roc(model_bounds, true_model_bool)
+        
     return fdr, pvals
 
 
+def plt_roc(bounds, true_model):
+    bounds_true = np.sort(bounds[true_model])
+    bounds_false = np.sort(bounds[~true_model])
+    size_true_model = np.sum(true_model)
+    p, = np.shape(true_model)
+
+    bounds_sorted = np.sort(bounds)
+    roc_tdr = []
+    roc_fdr = []
+    for i in range(p):
+            
+        n_true = np.searchsorted(bounds_true, bounds_sorted[i], side='right')
+        n_false = np.searchsorted(bounds_false, bounds_sorted[i], side='right')
+        tdr = float(n_true) / size_true_model
+        fdr = float(n_false) / (p-size_true_model)
+        roc_tdr.append(tdr)
+        roc_fdr.append(fdr)
+        
+    plt.scatter(roc_fdr, roc_tdr)
+    plt.plot(roc_fdr, roc_fdr, c='r')
+    plt.show()
+
+
+        
 def multiple_test(n_test,
                   model_selection='multivariate',
                   n_samples=100,
