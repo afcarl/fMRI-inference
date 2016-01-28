@@ -141,29 +141,17 @@ def test(model_selection='multivariate',
 
 
 def plt_roc(bounds, true_model):
-    bounds_true = np.sort(bounds[true_model])
-    bounds_false = np.sort(bounds[~true_model])
-    size_true_model = np.sum(true_model)
+    from sklearn.metrics import roc_curve
     p, = np.shape(true_model)
+    fpr, tpr, th = roc_curve(true_model, bounds)
 
-    bounds_sorted = np.sort(bounds)
-    roc_tdr = []
-    roc_fdr = []
-    for i in range(p):
-            
-        n_true = np.searchsorted(bounds_true, bounds_sorted[i], side='right')
-        n_false = np.searchsorted(bounds_false, bounds_sorted[i], side='right')
-        tdr = float(n_true) / size_true_model
-        fdr = float(n_false) / (p-size_true_model)
-        roc_tdr.append(tdr)
-        roc_fdr.append(fdr)
-        
-    plt.scatter(roc_fdr, roc_tdr)
-    plt.plot(roc_fdr, roc_fdr, c='r')
+    plt.scatter(fpr, tpr)
+    plt.plot(fpr, tpr, c='b')
+    plt.plot(fpr, fpr, c='r')
+    plt.axis('tight')
     plt.show()
 
 
-        
 def multiple_test(n_test,
                   model_selection='multivariate',
                   n_samples=100,
