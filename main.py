@@ -158,7 +158,7 @@ def plt_roc(bounds, true_model):
         roc_tdr.append(tdr)
         roc_fdr.append(fdr)
         
-    plt.scatter(roc_fdr, roc_tdr)
+    plt.plot(roc_fdr, roc_tdr, c='b')
     plt.plot(roc_fdr, roc_fdr, c='r')
     plt.show()
 
