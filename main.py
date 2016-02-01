@@ -143,6 +143,8 @@ def test(model_selection='multivariate',
 def plt_roc(bounds, true_model):
     from sklearn.metrics import roc_curve
     p, = np.shape(true_model)
+    true_model = true_model.astype(int)
+    scores = 1. - bounds
     fpr, tpr, th = roc_curve(true_model, bounds)
 
     plt.scatter(fpr, tpr)

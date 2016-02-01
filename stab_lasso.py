@@ -275,7 +275,6 @@ def select_model_fdr(pvalues, q, normalize=True):
 
 def select_model_fdr_bounds(pvalues, normalize=True):
     p, = pvalues.shape
-    #pdb.set_trace()
     pvalues_argsort = np.argsort(pvalues)
     pvalues_sorted = pvalues[pvalues_argsort]
     pvalues_sorted = pvalues_sorted / np.arange(1, p + 1)
@@ -287,15 +286,6 @@ def select_model_fdr_bounds(pvalues, normalize=True):
                                
     bounds = np.zeros(p)
     bounds[pvalues_argsort] = bounds_sorted
-    # limit = p - 1
-    # while limit > -1:
-    #     new_limit = max(j for j in range(-1, limit) if j == -1 or
-    #                     pvalues_sorted[j] < pvalues_sorted[limit])
-
-    #     bounds[:new_limit] = pvalues_sorted[new_limit]
-        
-    #     #bounds_sorted[new_limit + 1: limit + 1] = pvalues_sorted[limit]
-    #     limit = new_limit
         
     if normalize:
         #bounds *= p * np.log(p)
