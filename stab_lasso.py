@@ -260,32 +260,78 @@ def select_model_fdr(pvalues, q, normalize=True):
     p, = pvalues.shape
     #pdb.set_trace()
     pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
-    newq = q / np.log(p)
+    #newq = q / np.log(p)
+    newq = q
     if normalize:
         newq = newq / p
+    if np.min(pvalues_sorted) > newq:
+        return np.array([])
+    
     h = max(i for i in range(p) if pvalues_sorted[i] <= newq)
-    bound = h * pvalues_sorted[h]
-    model = np.array([i for i in range(p) if pvalues[i] < bound])
+    bound = (h+1) * pvalues_sorted[h]
+    model = np.array([i for i in range(p) if pvalues[i] <= bound])
     return model
 
 
 def select_model_fdr_bounds(pvalues, normalize=True):
     p, = pvalues.shape
     #pdb.set_trace()
-    pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
+    pvalues_argsort = np.argsort(pvalues)
+    pvalues_sorted = pvalues[pvalues_argsort]
+    pvalues_sorted = pvalues_sorted / np.arange(1, p + 1)
+
+    bounds_sorted = pvalues_sorted
+
+    for i in range(p-1, 0, -1):
+        bounds_sorted[i-1] = min(bounds_sorted[i-1], bounds_sorted[i])
+                               
     bounds = np.zeros(p)
-    limit = p - 1
-    while limit > -1:
-        new_limit = max(j for j in range(-1, limit) if j == -1 or
-                        pvalues_sorted[j] > pvalues_sorted[limit])
-        bounds[new_limit + 1: limit + 1] = limit * pvalues_sorted[limit]
-        limit = new_limit
+    bounds[pvalues_argsort] = bounds_sorted
+    # limit = p - 1
+    # while limit > -1:
+    #     new_limit = max(j for j in range(-1, limit) if j == -1 or
+    #                     pvalues_sorted[j] < pvalues_sorted[limit])
+
+    #     bounds[:new_limit] = pvalues_sorted[new_limit]
+        
+    #     #bounds_sorted[new_limit + 1: limit + 1] = pvalues_sorted[limit]
+    #     limit = new_limit
+        
     if normalize:
-        bounds *= p * np.log(p)
+        #bounds *= p * np.log(p)
+        bounds *= p
     else:
-        bounds *= np.log(p)
+        #bounds *= np.log(p)
+        pass
+
+    bounds = np.clip(bounds, 0., 1.)
+    #pdb.set_trace()
+    #bounds[pvalues_argsort] = bounds_sorted
     return bounds
 
+
+def test_select_model_fdr_bounds():
+    p = 100
+    pvalues = np.random.uniform(size=p) ** 5
+
+    bounds = select_model_fdr_bounds(pvalues)
+    bounds_sorted = np.sort(bounds)
+    
+    print "pvalues : ", pvalues
+    print "bounds : ", bounds
+    b = True
+    bool_array = np.zeros(1000, dtype=bool)
+    for i in range(1000):
+        model1 = set(select_model_fdr(pvalues, i / 1000.))
+        model2 = set(np.array([j for j in range(p) if bounds[j] <= i / 1000.]))
+        
+        
+        bool_array[i] = np.all(model1 == model2)
+        if not bool_array[i]:
+            print "model1 - model2 : ", model1 - model2
+            print "model2 - model1: ", model2 - model1
+            #pdb.set_trace()
+    return bool_array
 
 def pval_aggr(pvalues, gamma_min=0.05):
     n_split, p = pvalues.shape
@@ -298,3 +344,9 @@ def pval_aggr(pvalues, gamma_min=0.05):
     q *= 1 - np.log(gamma_min)
     q = q.clip(0., 1.)
     return q
+
+
+
+if __name__ == "__main__":
+    import doctest
+    # doctest.testmod()
