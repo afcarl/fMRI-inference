@@ -131,9 +131,9 @@ def test(model_selection='multivariate',
     if plot_roc:
         
         if model_selection == 'univariate':
-            model_bounds = np.sort(select_model_fdr_bounds(pvals))
+            model_bounds = select_model_fdr_bounds(pvals)
         elif model_selection == 'multivariate':
-            model_bounds = np.sort(select_model_fdr_bounds(pvals, normalize=False))
+            model_bounds = select_model_fdr_bounds(pvals, normalize=False)
 
         plt_roc(model_bounds, true_model_bool)
         
@@ -143,8 +143,8 @@ def test(model_selection='multivariate',
 def plt_roc(bounds, true_model):
     from sklearn.metrics import roc_curve
     p, = np.shape(true_model)
-    scores = 1. - bounds
-    fpr, tpr, th = roc_curve(true_model, bounds)
+    scores = 1 - bounds
+    fpr, tpr, th = roc_curve(true_model, scores)
 
     plt.scatter(fpr, tpr)
     plt.plot(fpr, tpr, c='b')
