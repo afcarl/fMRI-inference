@@ -57,7 +57,7 @@ def test(model_selection='multivariate',
     # lam = theta * np.max(np.abs(np.dot(X.T, y)))/k
     # print "Lambda : ", lam
     B = stab_lasso(y, X, theta, n_split=n_split, size_split=size_split,
-                   n_clusters=k, connectivity=co)
+                   n_clusters=k, connectivity=co, random_state=rs)
     B.fit()
     
     beta_array = B._beta_array
@@ -180,6 +180,19 @@ def multiple_test(n_test,
                       plot=plot)
         fdr_array.append(fdr)
     return fdr_array
+
+
+
+test(model_selection='univariate',
+     plot_roc=True,
+     mean_size_clust = 1,
+     n_split=1)
+
+test(model_selection='univariate',
+     plot_roc=True,
+     mean_size_clust = 8,
+     n_split = 100)
+
 
 # r = np.random.randint(0, 200)
 

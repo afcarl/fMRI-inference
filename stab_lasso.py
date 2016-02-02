@@ -15,7 +15,7 @@ class stab_lasso(object):
     alpha = 0.05
 
     def __init__(self, y, X, theta, n_split=1, size_split=None,
-                 n_clusters=None, connectivity=None):
+                 n_clusters=None, connectivity=None, random_state=0):
         """
 
         Parameters
@@ -61,6 +61,7 @@ class stab_lasso(object):
             n_clusters = p
         self._n_clusters = n_clusters
         self.connectivity = connectivity
+        self.random_state = random_state
 
     @staticmethod
     def projection(X, k, connectivity):
@@ -95,6 +96,9 @@ class stab_lasso(object):
         n_clusters = self._n_clusters
         connectivity = self.connectivity
         theta = self.theta
+
+        random_state = self.random_state
+        np.random.seed(random_state)
 
         beta_array = np.zeros((n_split, p))
         split_array = np.zeros((n_split, size_split), dtype=int)
