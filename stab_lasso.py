@@ -284,7 +284,7 @@ def select_model_fdr_bounds(pvalues, normalize=True):
     pvalues_sorted = pvalues_sorted / np.arange(1, p + 1)
 
     bounds_sorted = pvalues_sorted
-
+    #pdb.set_trace()
     for i in range(p-1, 0, -1):
         bounds_sorted[i-1] = min(bounds_sorted[i-1], bounds_sorted[i])
                                

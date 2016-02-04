@@ -183,15 +183,15 @@ def multiple_test(n_test,
 
 
 
-test(model_selection='univariate',
-     plot_roc=True,
-     mean_size_clust = 1,
-     n_split=1)
+# test(model_selection='univariate',
+#      plot_roc=True,
+#      mean_size_clust = 1,
+#      n_split=1)
 
-test(model_selection='univariate',
-     plot_roc=True,
-     mean_size_clust = 8,
-     n_split = 100)
+# test(model_selection='univariate',
+#      plot_roc=True,
+#      mean_size_clust = 8,
+#      n_split = 100)
 
 
 # r = np.random.randint(0, 200)
