@@ -100,7 +100,7 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
         X_test_proj = np.dot(P, X_test.T).T
         corr_perm = np.zeros((n_perm, n_clusters))
         for s in range(n_perm):
-            perm = np.random.permutation(n - size_split)
+            perm = np.random.permutation(int(n - size_split))
             corr_perm[s] = np.dot(y_test.T, X_test_proj[perm])
 
         corr_perm = np.abs(corr_perm)
@@ -322,7 +322,7 @@ class StabilityLasso(object):
 
     def univariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = univariate_split_pval(
-            self.X, self.y, self.n_split, self.size_split, self.n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pvalues_aggregated = pvalues_aggregated
@@ -333,4 +333,5 @@ class StabilityLasso(object):
         return self._pvalues_aggregated < (alpha / p)
 
     def select_model_fdr(self, q, normalize=True):
-        return (select_model_fdr(self._pvalues_aggregated, q)
+        return (select_model_fdr(self._pvalues_aggregated, q))
+

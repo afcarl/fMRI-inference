@@ -40,7 +40,7 @@ def test(model_selection='multivariate',
     beta = B._soln
 
     if model_selection == 'univariate':
-        pvals = B.univariate_split_pval()
+        pvals = B.univariate_split_pval(X, y)
     elif model_selection == 'multivariate':
         pvals = B.multivariate_split_pval(X, y)
     else:
@@ -112,7 +112,8 @@ def multiple_test(n_test,
     true_coeffs = []
     
     for i in range(n_test):
-        fdr, recall, pval, true_coeff = test(n_samples=n_samples,
+        fdr, recall, pval, true_coeff = test(model_selection=model_selection,
+                              n_samples=n_samples,
                               n_split=n_split,
                               split_ratio=split_ratio,
                               mean_size_clust=mean_size_clust,
@@ -144,7 +145,8 @@ def multiple_test(n_test,
 
 if __name__ == '__main__':
     fdr_array, recall_array = multiple_test(
-        n_test=10, n_split=30, mean_size_clust=10, split_ratio=.5, plot=False)
+        model_selection='univariate',
+        n_test=10, n_split=100, mean_size_clust=10, split_ratio=.5, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
     print('fwer:', np.mean(fdr_array > 0))
