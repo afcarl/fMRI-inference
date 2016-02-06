@@ -129,6 +129,8 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     return q
 
 
+
+
 def select_model_fdr(pvalues, q,  independant=False, normalize = True):
     """
     Return the model selected by the Benjamini-Hochberg procedure
@@ -195,6 +197,9 @@ def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
     bounds = np.clip(bounds, 0., 1.)
     return bounds
 
+def select_model_fwer_bounds(pvalues):
+    p,=pvalues.shape
+    return np.clip(pvalues * p, 0., 1.)
 
 def test_select_model_fdr_bounds():
     p = 100
