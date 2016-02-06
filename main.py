@@ -1,31 +1,10 @@
 
 import numpy as np
 from scipy.sparse import coo_matrix
-
-from plot_simulated_data import *
-from stab_lasso import *
-
 import matplotlib.pyplot as plt
 
-print "testmain"
-# import pdb
-
-
-def get_param(snr=100, n_samples=100, size=12, n_iterations=100):
-    norm = []
-    for i in range(n_iterations):
-        if i % 10 == 0:
-            print i
-        X, y, snr, noise, beta0, size = \
-            create_simulation_data(snr=-10, n_samples=100, size=15,
-                                   random_state=i)
-        v = np.dot(X.T, y)
-        u = np.abs(v).max()
-        norm.append(u)
-
-    norm = sorted(norm)
-    lam = norm[(9 * n_iterations) / 10]
-    return lam
+from plot_simulated_data import create_simulation_data, plot_slices
+from stab_lasso import StabilityLasso
 
 
 def connectivity(size):
@@ -36,7 +15,6 @@ def connectivity(size):
 
 def test(model_selection='multivariate',
          plot=False,
-         plot_roc=False,
          print_results=True,
          n_samples=100,
          n_split=1,
@@ -44,187 +22,113 @@ def test(model_selection='multivariate',
          mean_size_clust=1,
          theta=0.1,
          snr=-10,
-         rs=0):
+         rs=1,
+         alpha=.05):
     size = 12
-    p = size **3
-    size_split = int(split_ratio * n_samples)
-    k = int(p / mean_size_clust)
+
+    k = int(size ** 3 / mean_size_clust)
 
     X, y, snr, noise, beta0, size = \
         create_simulation_data(snr, n_samples, size, rs)
-    co = connectivity(size)
-    true_coeff = [i for i in range(p) if beta0[i] != 0]
-    # lam = theta * np.max(np.abs(np.dot(X.T, y)))/k
-    # print "Lambda : ", lam
-    B = stab_lasso(y, X, theta, n_split=n_split, size_split=size_split,
-                   n_clusters=k, connectivity=co, random_state=rs)
-    B.fit()
-    
-    beta_array = B._beta_array
+
+    connectivity_ = connectivity(size)
+    true_coeff = beta0 ** 2 > 0
+    B = StabilityLasso(theta, n_split=n_split, ratio_split=split_ratio,
+                       n_clusters=k, model_selection=model_selection)
+    B.fit(X, y, connectivity_)
     beta = B._soln
 
     if model_selection == 'univariate':
         pvals = B.univariate_split_pval()
     elif model_selection == 'multivariate':
-        pvals = B.multivariate_split_pval()
+        pvals = B.multivariate_split_pval(X, y)
     else:
         raise ValueError("This model selection method doesn't exist")
 
-    true_model = np.where(beta0)[0]
-    true_model_bool = np.zeros(p, dtype=bool)
-    true_model_bool[true_model] = True
 
     if model_selection == 'univariate':
-        selected_model = select_model_fdr(pvals, 0.1)
+        selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
-        selected_model = select_model_fdr(pvals, 0.1, normalize=False)
+        # selected_model = B.select_model_fwer(alpha)
+        selected_model = B.select_model_fdr(alpha)
 
-    beta_corrected = np.zeros(p)
+    beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
         beta_corrected[selected_model] = beta[selected_model]
-        false_discovery = selected_model[beta0[selected_model] == 0]
-        true_discovery = selected_model[beta0[selected_model] != 0]
+        false_discovery = selected_model * (~true_coeff)
+        true_discovery = selected_model * true_coeff
     else:
         false_discovery = np.array([])
         true_discovery  = np.array([])
 
-    undiscovered = len(true_coeff) - true_discovery.shape[0]
+    undiscovered = true_coeff.sum() - true_discovery.sum()
 
-    fdr = (float(false_discovery.shape[0]) /
-           max(1., float(selected_model.shape[0])))
+    fdr = (float(false_discovery.sum()) /
+           max(1., float(selected_model.sum())))
+
+    recall = float(true_discovery.sum()) / np.sum(true_coeff)
+
+    print np.sum(false_discovery)
 
     if print_results:
         print("------------------- RESULTS -------------------")
         print("-----------------------------------------------")
         print("FDR : ", fdr)
-        print("DISCOVERED FEATURES : "+ str(true_discovery.shape[0]))
-        print("UNDISCOVERED FEATURES : "+ str(undiscovered))
+        print("DISCOVERED FEATURES : ", true_discovery.shape[0])
+        print("UNDISCOVERED FEATURES : ", undiscovered)
         print("-----------------------------------------------")
         print("TRUE DISCOVERY")
         print("| Feature ID |       p-value      |")
         for i in true_discovery:
-            print("|    "+ str(i).zfill(4)+ "    |   "+ str(pvals[i])+ "   |")
+            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
         print("-----------------------------------------------")
         print("FALSE DISCOVERY")
         print("| Feature ID |       p-value      |")
         for i in false_discovery:
-            print("|    "+ str(i).zfill(4)+ "    |   "+ str(pvals[i])+ "   |")
+            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
         print("-----------------------------------------------")
     if plot:
-        # Create masks for SearchLight. process_mask is the voxels where SearchLight
-        # computation is performed. It is a subset of the brain mask, just to reduce
-        # computation time.
-        # mask = np.ones((size, size, size), np.bool)
-        # mask_img = nibabel.Nifti1Image(mask.astype(np.int), np.eye(4))
-        # process_mask = np.zeros((size, size, size), np.bool)
-        # process_mask[:, :, 0] = True
-        # process_mask[:, :, 5] = True
-        # process_mask[:, :, 11] = True
-        # process_mask_img = nibabel.Nifti1Image(process_mask.astype(np.int),
-        #                                        np.eye(4))
-
-        coefs = np.reshape(beta0, [size, size, size])
         coef_est = np.reshape(beta_corrected, [size, size, size])
-        plot_slices(coef_est, title="Ground truth")
+        plot_slices(coef_est, title="Estimated")
+        plot_slices(np.reshape(true_coeff, (size, size, size)),
+                    title="Ground truth")
         plt.show()
 
-    if plot_roc:
-        
-        if model_selection == 'univariate':
-            model_bounds = select_model_fdr_bounds(pvals)
-        elif model_selection == 'multivariate':
-            model_bounds = select_model_fdr_bounds(pvals, normalize=False)
-
-        plt_roc(model_bounds, true_model_bool)
-        
-    return fdr, pvals
+    return fdr, recall, pvals
 
 
-def plt_roc(bounds, true_model):
-    from sklearn.metrics import roc_curve
-    p, = np.shape(true_model)
-    scores = 1 - bounds
-    fpr, tpr, th = roc_curve(true_model, scores)
-
-    plt.scatter(fpr, tpr)
-    plt.plot(fpr, tpr, c='b')
-    plt.plot(fpr, fpr, c='r')
-    plt.axis('tight')
-    plt.show()
-
-
-        
 def multiple_test(n_test,
                   model_selection='multivariate',
                   n_samples=100,
-                  n_split=1,
+                  n_split=30,
                   split_ratio=.4,
                   mean_size_clust=1,
                   theta=0.1,
                   snr=-10,
-                  rs_start=0,
+                  rs_start=1,
                   plot=False):
     fdr_array = []
+    recall_array = []
+
     for i in range(n_test):
-        if i % 10 == 0:
-            print(i)
-
-        fdr, _ = test(n_samples=n_samples,
-                      n_split=n_split,
-                      split_ratio=split_ratio,
-                      mean_size_clust=mean_size_clust,
-                      theta=theta,
-                      snr=snr,
-                      rs=rs_start + i,
-                      print_results=False,
-                      plot=plot)
+        fdr, recall, _ = test(n_samples=n_samples,
+                              n_split=n_split,
+                              split_ratio=split_ratio,
+                              mean_size_clust=mean_size_clust,
+                              theta=theta,
+                              snr=snr,
+                              rs=rs_start + i,
+                              print_results=False,
+                              plot=plot)
         fdr_array.append(fdr)
-    return fdr_array
-
-
-
-# test(model_selection='univariate',
-#      plot_roc=True,
-#      mean_size_clust = 1,
-#      n_split=1)
-
-# test(model_selection='univariate',
-#      plot_roc=True,
-#      mean_size_clust = 8,
-#      n_split = 100)
-
+        recall_array.append(recall)
+    return np.array(fdr_array), np.array(recall_array)
 
 # r = np.random.randint(0, 200)
 
-# # Create data
-# X, y, snr, _, coefs, size = \
-#     create_simulation_data(snr=-10, n_samples=100, size=12, random_state = r)
-
-# # Create masks for SearchLight. process_mask is the voxels where SearchLight
-# # computation is performed. It is a subset of the brain mask, just to reduce
-# # computation time.
-# mask = np.ones((size, size, size), np.bool)
-# mask_img = nibabel.Nifti1Image(mask.astype(np.int), np.eye(4))
-# process_mask = np.zeros((size, size, size), np.bool)
-# process_mask[:, :, 0] = True
-# process_mask[:, :, 5] = True
-# process_mask[:, :, 11] = True
-# process_mask_img = nibabel.Nifti1Image(process_mask.astype(np.int), np.eye(4))
-
-
-# coefs = np.reshape(coefs, [size, size, size])
-
-# size_split = 80
-# n_split = 20
-# k = size**3 / 2
-# co = connectivity(size)
-# lam = 10.
-
-# B = stab_lasso(y, X, lam, n_split=n_split, size_split=size_split, k=k, connectivity=co)
-# B.fit()
-# beta = B.soln
-
-# coef_est = np.reshape(beta, [size, size, size])
-
-# plot_slices(coef_est, title="Ground truth")
-# plt.show()
+if __name__ == '__main__':
+    fdr_array, recall_array = multiple_test(
+        n_test=30, n_split=30, mean_size_clust=16, split_ratio=.5, plot=False)
+    print('average fdr:', np.mean(fdr_array))
+    print('average recall:', np.mean(recall_array))
+    print('fwer:', np.mean(fdr_array > 0))
