@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 from plot_simulated_data import create_simulation_data, plot_slices
 from stab_lasso import StabilityLasso
+from sklearn.metrics import roc_curve
 
 
 def connectivity(size):
@@ -24,7 +25,7 @@ def test(model_selection='multivariate',
          snr=-10,
          rs=1,
          alpha=.05):
-    size = 12
+    size = 6
 
     k = int(size ** 3 / mean_size_clust)
 
@@ -68,8 +69,6 @@ def test(model_selection='multivariate',
 
     recall = float(true_discovery.sum()) / np.sum(true_coeff)
 
-    print np.sum(false_discovery)
-
     if print_results:
         print("------------------- RESULTS -------------------")
         print("-----------------------------------------------")
@@ -94,7 +93,7 @@ def test(model_selection='multivariate',
                     title="Ground truth")
         plt.show()
 
-    return fdr, recall, pvals
+    return fdr, recall, pvals, true_coeff
 
 
 def multiple_test(n_test,
@@ -109,9 +108,11 @@ def multiple_test(n_test,
                   plot=False):
     fdr_array = []
     recall_array = []
-
+    pvals = []
+    true_coeffs = []
+    
     for i in range(n_test):
-        fdr, recall, _ = test(n_samples=n_samples,
+        fdr, recall, pval, true_coeff = test(n_samples=n_samples,
                               n_split=n_split,
                               split_ratio=split_ratio,
                               mean_size_clust=mean_size_clust,
@@ -122,13 +123,28 @@ def multiple_test(n_test,
                               plot=plot)
         fdr_array.append(fdr)
         recall_array.append(recall)
+        pvals.append(pval)
+        true_coeffs.append(true_coeff)
+
+    fpr, tpr, thresholds = roc_curve(
+        np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
+    plt.figure()
+    plt.plot(fpr, tpr,)
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver operating characteristic example')
+    plt.show()
+
     return np.array(fdr_array), np.array(recall_array)
 
 # r = np.random.randint(0, 200)
 
 if __name__ == '__main__':
     fdr_array, recall_array = multiple_test(
-        n_test=30, n_split=30, mean_size_clust=16, split_ratio=.5, plot=False)
+        n_test=10, n_split=30, mean_size_clust=10, split_ratio=.5, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
     print('fwer:', np.mean(fdr_array > 0))
