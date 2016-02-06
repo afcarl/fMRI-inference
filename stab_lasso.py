@@ -129,26 +129,58 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     return q
 
 
-def select_model_fdr(pvalues, q):
+def select_model_fdr(pvalues, q,  independant=False, normalize = True):
+    """
+    Return the model selected by the Benjamini-Hochberg procedure
+
+    pvalues : np.float(p)
+              The pvalues of the model
+
+    q : np.float
+        The level chosen for the Benjamini-Hochberg procedure
+
+    independant : bool, optional
+                  Tells if the features variables are independant. If they are not, 
+                  the procedure is the Benjamini-Hochberg-Yekutieli procedure
+
+    normalize : bool, optional
+                This option is usefull when computing the aggregated p-values (then it has to be True)
+                Else, it is False
+
+
+    """
     p, = pvalues.shape
     pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
-    newq = q / np.log(p)
-    if (pvalues_sorted > newq).all():
+    if not independant:
+        q = q / np.log(p)
+    if normalize:
+        q = q / p
+
+    if (pvalues_sorted > q).all():
         bound = 0
     else:
-        h = np.where(pvalues_sorted <= newq)[0][-1]
+        h = np.where(pvalues_sorted <= q)[0][-1]
         bound = pvalues_sorted[h] * (h + 1)
     return pvalues < bound
 
 
-def select_model_fdr_bounds(pvalues, normalize=True):
+def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
+    """
+    Returns for each feature $i$ the bound $\alpha_i$ such that
+    $i$ is selected by a Benjamini-Hochberg procedure of level q
+    if an only if $q > \alpha_i$.
+
+    To be more concrete, if 0 < q < 1, and we define : 
+    model1 = select_model_fdr(pvalues, q)
+    model2 = (select_model_fdr_bounds(pvalues) > q)
+    Then model1 = model2
+    """
     p, = pvalues.shape
     pvalues_argsort = np.argsort(pvalues)
     pvalues_sorted = pvalues[pvalues_argsort]
     pvalues_sorted = pvalues_sorted / np.arange(1, p + 1)
 
     bounds_sorted = pvalues_sorted
-    #pdb.set_trace()
     for i in range(p-1, 0, -1):
         bounds_sorted[i-1] = min(bounds_sorted[i-1], bounds_sorted[i])
                                
@@ -156,15 +188,11 @@ def select_model_fdr_bounds(pvalues, normalize=True):
     bounds[pvalues_argsort] = bounds_sorted
         
     if normalize:
-        #bounds *= p * np.log(p)
         bounds *= p
-    else:
-        #bounds *= np.log(p)
-        pass
-
+    if not independant:
+        bounds *= np.log(p)
+    
     bounds = np.clip(bounds, 0., 1.)
-    #pdb.set_trace()
-    #bounds[pvalues_argsort] = bounds_sorted
     return bounds
 
 
@@ -233,7 +261,7 @@ class StabilityLasso(object):
     def fit(self, X, y, connectivity=None, **lasso_args):
         """
 
-        y : np.float(y)
+        y : np.float(n)
             The target, in the model $y = X\beta$
 
         X : np.float((n, p))
