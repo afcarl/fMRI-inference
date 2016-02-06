@@ -296,7 +296,8 @@ class StabilityLasso(object):
         return pvalues_aggregated
 
     def select_model_fwer(self, alpha):
-        return self._pvalues_aggregated < alpha
+        p, = self._pvalues_aggregated.shape
+        return self._pvalues_aggregated < (alpha / p)
 
     def select_model_fdr(self, q, normalize=True):
         return (select_model_fdr(self._pvalues_aggregated, q)
