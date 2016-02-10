@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.linear_model import Lasso
 from sklearn.cluster import FeatureAgglomeration, AgglomerativeClustering
 from sklearn.utils import check_random_state
-
+from scipy.stats import pearsonr
 import statsmodels.api as sm
 
 
@@ -81,7 +81,8 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
 
 
 def univariate_split_pval(X, y, n_split, size_split, n_clusters,
-                         beta_array, split_array, clust_array):
+                         beta_array, split_array, clust_array,
+                          permute=False):
     """Univariate p-values computation
     todo: replace permutations with analytical tests
     """
@@ -98,16 +99,19 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
         P, P_inv = pp_inv(clust_array[i])
 
         X_test_proj = np.dot(P, X_test.T).T
-        corr_perm = np.zeros((n_perm, n_clusters))
-        for s in range(n_perm):
-            perm = np.random.permutation(int(n - size_split))
-            corr_perm[s] = np.dot(y_test.T, X_test_proj[perm])
-
-        corr_perm = np.abs(corr_perm)
-        corr_true = np.abs(np.dot(y_test.T, X_test_proj).reshape(
+        corr_true = np.abs(np.dot(y_test, X_test_proj).reshape(
                 (n_clusters)))
 
-        pvalues_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
+        if permute:
+            corr_perm = np.zeros((n_perm, n_clusters))
+            for s in range(n_perm):
+                perm = np.random.permutation(int(n - size_split))
+                corr_perm[s] = np.dot(y_test.T, X_test_proj[perm])
+            corr_perm = np.abs(corr_perm)
+            pvalues_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
+        else:
+            pvalues_proj = np.array([pearsonr(y_test, x)[1]
+                                     for x in X_test_proj.T])
         pvalues[i, :] = np.dot(P_inv, pvalues_proj)
 
     if n_split > 1:
@@ -129,9 +133,7 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     return q
 
 
-
-
-def select_model_fdr(pvalues, q,  independant=False, normalize = True):
+def select_model_fdr(pvalues, q, independant=False, normalize=True):
     """
     Return the model selected by the Benjamini-Hochberg procedure
 
@@ -142,12 +144,13 @@ def select_model_fdr(pvalues, q,  independant=False, normalize = True):
         The level chosen for the Benjamini-Hochberg procedure
 
     independant : bool, optional
-                  Tells if the features variables are independant. If they are not, 
-                  the procedure is the Benjamini-Hochberg-Yekutieli procedure
+        Tells if the features variables are independant. If they are not,
+        the procedure is the Benjamini-Hochberg-Yekutieli procedure
 
     normalize : bool, optional
-                This option is usefull when computing the aggregated p-values (then it has to be True)
-                Else, it is False
+        This option is usefull when computing the aggregated p-values
+        (then it has to be True)
+        Else, it is False
 
 
     """
@@ -185,38 +188,36 @@ def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
     bounds_sorted = pvalues_sorted
     for i in range(p-1, 0, -1):
         bounds_sorted[i-1] = min(bounds_sorted[i-1], bounds_sorted[i])
-                               
+
     bounds = np.zeros(p)
     bounds[pvalues_argsort] = bounds_sorted
-        
+
     if normalize:
         bounds *= p
     if not independant:
         bounds *= np.log(p)
-    
+
     bounds = np.clip(bounds, 0., 1.)
     return bounds
 
+
 def select_model_fwer_bounds(pvalues):
-    p,=pvalues.shape
+    p, = pvalues.shape
     return np.clip(pvalues * p, 0., 1.)
+
 
 def test_select_model_fdr_bounds():
     p = 100
     pvalues = np.random.uniform(size=p) ** 5
-
     bounds = select_model_fdr_bounds(pvalues)
     bounds_sorted = np.sort(bounds)
-    
+
     print "pvalues : ", pvalues
     print "bounds : ", bounds
-    b = True
     bool_array = np.zeros(1000, dtype=bool)
     for i in range(1000):
         model1 = set(select_model_fdr(pvalues, i / 1000.))
         model2 = set(np.array([j for j in range(p) if bounds[j] <= i / 1000.]))
-        
-        
         bool_array[i] = np.all(model1 == model2)
         if not bool_array[i]:
             print "model1 - model2 : ", model1 - model2
@@ -334,4 +335,3 @@ class StabilityLasso(object):
 
     def select_model_fdr(self, q, normalize=True):
         return (select_model_fdr(self._pvalues_aggregated, q))
-
