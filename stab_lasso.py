@@ -4,40 +4,47 @@ from sklearn.cluster import FeatureAgglomeration, AgglomerativeClustering
 from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
+from scipy.sparse import coo_matrix, dia_matrix
+from fast_cluster import ReNN, recursive_nn
 
 
-def projection(X, k, connectivity):
+def projection(X, k, connectivity, ward=True):
     """
     Take the data, and returns a matrix, to reduce the dimension
     Returns, invP, (P.(X.T)).T and the underlying labels
     """
     n, p = X.shape
-    ward = FeatureAgglomeration(
-        linkage='ward', n_clusters=k, connectivity=connectivity)
-    ward.fit(X)
+    if ward:
+        clustering = FeatureAgglomeration(
+            linkage='ward', n_clusters=k, connectivity=connectivity)
+        labels = clustering.fit(X).labels_
+    else:
+        _, labels = recursive_nn(connectivity, X, n_clusters=k)
+
     #
-    labels = ward.labels_
-    P = np.zeros((k, p))
-    P[labels, np.arange(p)] = 1
-    P_inv = P.copy().T
-    s_array = P.sum(axis=0)
-    P = P / s_array
+    P, P_inv = pp_inv(labels)
     X_proj = P.dot(X.T).T
-    # should be done through ward.transform, but there is an issue
+    # should be done through clustering.transform, but there is an issue
     # with the normalization
-    # X_proj = ward.transform(X)
+    # X_proj = clustering.transform(X)
     return P_inv, X_proj, labels
 
 
 def pp_inv(clust):
-    n_clusters = len(np.unique(clust))
-    p = clust.size
-    P = np.zeros((n_clusters, p))
-    P[clust, np.arange(p)] = 1.
-    P_inv = np.copy(P)
-    P_inv = P_inv.T
-    s_array = P.sum(axis=0)
-    P = P / s_array
+    p = np.size(clust)
+    n_labels = len(np.unique(clust))
+
+    parcellation_masks = coo_matrix(
+        (np.ones(p), (clust, np.arange(p))),
+        shape=(n_labels, p),
+        dtype=np.float32).tocsc()
+
+    inv_sum_col = dia_matrix(
+        (np.array(1. / parcellation_masks.sum(1)).squeeze(), 0),
+        shape=(n_labels, n_labels))
+
+    P = inv_sum_col * parcellation_masks
+    P_inv = parcellation_masks.T
     return P, P_inv
 
 
@@ -98,7 +105,7 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
         # projection
         P, P_inv = pp_inv(clust_array[i])
 
-        X_test_proj = np.dot(P, X_test.T).T
+        X_test_proj = P.dot(X_test.T).T
         corr_true = np.abs(np.dot(y_test, X_test_proj).reshape(
                 (n_clusters)))
 
@@ -112,7 +119,7 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
         else:
             pvalues_proj = np.array([pearsonr(y_test, x)[1]
                                      for x in X_test_proj.T])
-        pvalues[i, :] = np.dot(P_inv, pvalues_proj)
+        pvalues[i, :] = P_inv.dot(pvalues_proj)
 
     if n_split > 1:
         pvalues_aggregated = pvalues_aggregation(pvalues)
@@ -300,7 +307,7 @@ class StabilityLasso(object):
             lasso_splitted.fit(X_proj, y_splitted)
 
             beta_proj = lasso_splitted.coef_
-            beta = np.dot(P_inv, beta_proj)
+            beta = P_inv.dot(beta_proj)
 
             beta_array[i] = beta
             split_array[i] = split

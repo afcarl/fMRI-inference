@@ -25,7 +25,7 @@ def test(model_selection='multivariate',
          snr=-10,
          rs=1,
          alpha=.05):
-    size = 6
+    size = 40
 
     k = int(size ** 3 / mean_size_clust)
 
@@ -146,7 +146,7 @@ def multiple_test(n_test,
 if __name__ == '__main__':
     fdr_array, recall_array = multiple_test(
         model_selection='univariate',
-        n_test=10, n_split=100, mean_size_clust=10, split_ratio=.5, plot=False)
+        n_test=1, n_split=30, mean_size_clust=10, split_ratio=.5, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
     print('fwer:', np.mean(fdr_array > 0))
