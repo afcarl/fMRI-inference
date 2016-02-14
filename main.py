@@ -25,7 +25,7 @@ def test(model_selection='multivariate',
          snr=-10,
          rs=1,
          alpha=.05):
-    size = 6
+    size = 10
 
     k = int(size ** 3 / mean_size_clust)
 
@@ -51,7 +51,7 @@ def test(model_selection='multivariate',
         selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
         # selected_model = B.select_model_fwer(alpha)
-        selected_model = B.select_model_fdr(alpha)
+        selected_model = B.select_model_fdr(alpha, normalize = False)
 
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
@@ -73,18 +73,20 @@ def test(model_selection='multivariate',
         print("------------------- RESULTS -------------------")
         print("-----------------------------------------------")
         print("FDR : ", fdr)
-        print("DISCOVERED FEATURES : ", true_discovery.shape[0])
+        print("DISCOVERED FEATURES : ", true_discovery.sum())
         print("UNDISCOVERED FEATURES : ", undiscovered)
         print("-----------------------------------------------")
         print("TRUE DISCOVERY")
         print("| Feature ID |       p-value      |")
-        for i in true_discovery:
-            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
+        for i in range(size ** 3):
+            if true_discovery[i]:
+                print("|   "+str(i).zfill(4)+"   |  "+str(pvals[i])+"  |")
         print("-----------------------------------------------")
         print("FALSE DISCOVERY")
         print("| Feature ID |       p-value      |")
-        for i in false_discovery:
-            print("|   ", str(i).zfill(4), "   |  ", pvals[i], "  |")
+        for i in range(size ** 3):
+            if false_discovery[i]:
+                print("|   "+str(i).zfill(4)+"   |  "+str(pvals[i])+"  |")
         print("-----------------------------------------------")
     if plot:
         coef_est = np.reshape(beta_corrected, [size, size, size])
@@ -145,8 +147,8 @@ def multiple_test(n_test,
 
 if __name__ == '__main__':
     fdr_array, recall_array = multiple_test(
-        model_selection='univariate',
-        n_test=10, n_split=100, mean_size_clust=10, split_ratio=.5, plot=False)
+        model_selection='multivariate',
+        n_test=1, n_split=1000, mean_size_clust=10, split_ratio=.5, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
     print('fwer:', np.mean(fdr_array > 0))

@@ -5,6 +5,7 @@ from sklearn.utils import check_random_state
 
 import statsmodels.api as sm
 
+import pdb
 
 def projection(X, k, connectivity):
     """
@@ -44,6 +45,7 @@ def pp_inv(clust):
 def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
                             beta_array, split_array, clust_array):
     """Main function to obtain p-values across splits """
+    pdb.set_trace()
     n, p = X.shape
     pvalues = np.ones((n_split, p))
     for i in range(n_split):
