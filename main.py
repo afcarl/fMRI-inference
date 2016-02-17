@@ -143,12 +143,11 @@ def multiple_test(n_test,
 
     return np.array(fdr_array), np.array(recall_array)
 
-# r = np.random.randint(0, 200)
 
 if __name__ == '__main__':
     fdr_array, recall_array = multiple_test(
         model_selection='multivariate',
-        n_test=1, n_split=1, mean_size_clust=10, split_ratio=.4, plot=False)
+        n_test=10, n_split=3, mean_size_clust=10, split_ratio=.4, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
     print('fwer:', np.mean(fdr_array > 0))

@@ -5,7 +5,7 @@ from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
-#from fast_cluster import ReNN, recursive_nn
+from fast_cluster import ReNN, recursive_nn
 
 import pdb
 
@@ -52,7 +52,7 @@ def pp_inv(clust):
 def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
                             beta_array, split_array, clust_array):
     """Main function to obtain p-values across splits """
-    pdb.set_trace()
+    # pdb.set_trace()
     n, p = X.shape
     pvalues = np.ones((n_split, p))
     for i in range(n_split):
@@ -67,11 +67,11 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
 
         # get the support 
         beta = beta_array[i]
-        beta_proj = np.dot(P, beta)
+        beta_proj = P.dot(beta)
         # this is very awkward
         model_proj = (beta_proj ** 2 > 0)
         model_proj_size = model_proj.sum()
-        X_test_proj = np.dot(P, X_test.T).T
+        X_test_proj = P.dot(X_test.T).T
         X_model = X_test_proj[:, model_proj]
 
         # fit the model on test data to get p-values
@@ -80,7 +80,7 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         pvalues_proj[model_proj] = np.clip(
             model_proj_size * res.pvalues, 0., 1.)
 
-        pvalues[i] = np.dot(P_inv, pvalues_proj)
+        pvalues[i] = P_inv.dot(pvalues_proj)
 
     if n_split > 1:
         pvalues_aggregated = pvalues_aggregation(pvalues)
