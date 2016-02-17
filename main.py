@@ -112,7 +112,7 @@ def multiple_test(n_test,
     recall_array = []
     pvals = []
     true_coeffs = []
-    
+
     for i in range(n_test):
         fdr, recall, pval, true_coeff = test(model_selection=model_selection,
                               n_samples=n_samples,
@@ -144,10 +144,65 @@ def multiple_test(n_test,
     return np.array(fdr_array), np.array(recall_array)
 
 
-if __name__ == '__main__':
+def experiment_nominal_control():
     fdr_array, recall_array = multiple_test(
         model_selection='multivariate',
         n_test=10, n_split=3, mean_size_clust=10, split_ratio=.4, plot=False)
     print('average fdr:', np.mean(fdr_array))
     print('average recall:', np.mean(recall_array))
     print('fwer:', np.mean(fdr_array > 0))
+
+
+def experiment_pr_curve():
+    # set various parameters
+    n_samples = 100
+    model_selection = 'multivariate'
+    n_test = 20
+    split_ratio = .4
+    theta = 0.1
+    snr = - 10
+    rs_start = 1
+
+    ax = plt.subplot(111)
+    for n_split in [1, 10]:
+        for mean_size_clust in [1, 10]:
+            # collect results
+            pvals = []
+            true_coeffs = []
+            for i in range(n_test):
+                fdr, recall, pval, true_coeff = test(
+                    model_selection=model_selection,
+                    n_samples=n_samples,
+                    n_split=n_split,
+                    split_ratio=split_ratio,
+                    mean_size_clust=mean_size_clust,
+                    theta=theta,
+                    snr=snr,
+                    rs=rs_start + i,
+                    print_results=False,
+                    plot=False)
+                pvals.append(pval)
+                true_coeffs.append(true_coeff)
+                n_clusters = pval.size / mean_size_clust
+
+            fpr, tpr, thresholds = roc_curve(
+                np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
+            ax.plot(fpr, tpr, label='n_split=%d, %d clusters' % (
+                    n_split, n_clusters))
+    ax.plot([0, 1], [0, 1], 'k--')
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.legend(loc=4)
+    ax.set_title('ROC curves for basic settings')
+    plt.savefig('roc_curves.png')
+
+
+def experiment_univariate_multivariate():
+    pass
+
+
+if __name__ == '__main__':
+    experiment_pr_curve()
+    plt.show()
