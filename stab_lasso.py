@@ -7,7 +7,6 @@ import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
 from fast_cluster import ReNN, recursive_nn
 
-import pdb
 
 def projection(X, k, connectivity, ward=True):
     """

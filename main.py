@@ -107,53 +107,48 @@ def multiple_test(n_test,
                   theta=0.1,
                   snr=-10,
                   rs_start=1,
-                  plot=False):
+                  plot=False, 
+                  alpha=.05):
     fdr_array = []
     recall_array = []
     pvals = []
     true_coeffs = []
 
     for i in range(n_test):
-        fdr, recall, pval, true_coeff = test(model_selection=model_selection,
-                              n_samples=n_samples,
-                              n_split=n_split,
-                              split_ratio=split_ratio,
-                              mean_size_clust=mean_size_clust,
-                              theta=theta,
-                              snr=snr,
-                              rs=rs_start + i,
-                              print_results=False,
-                              plot=plot)
+        fdr, recall, pval, true_coeff = test(
+            model_selection=model_selection,
+            n_samples=n_samples,
+            n_split=n_split,
+            split_ratio=split_ratio,
+            mean_size_clust=mean_size_clust,
+            theta=theta,
+            snr=snr,
+            rs=rs_start + i,
+            print_results=False,
+            plot=plot,
+            alpha=alpha)
         fdr_array.append(fdr)
         recall_array.append(recall)
         pvals.append(pval)
         true_coeffs.append(true_coeff)
 
-    fpr, tpr, thresholds = roc_curve(
-        np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
-    plt.figure()
-    plt.plot(fpr, tpr,)
-    plt.plot([0, 1], [0, 1], 'k--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic example')
-    plt.show()
-
     return np.array(fdr_array), np.array(recall_array)
 
 
 def experiment_nominal_control():
-    fdr_array, recall_array = multiple_test(
-        model_selection='multivariate',
-        n_test=10, n_split=3, mean_size_clust=10, split_ratio=.4, plot=False)
-    print('average fdr:', np.mean(fdr_array))
-    print('average recall:', np.mean(recall_array))
-    print('fwer:', np.mean(fdr_array > 0))
+    for n_split in [1, 10]:
+        for mean_size_clust in [1, 10]:
+            fdr_array, recall_array = multiple_test(
+                model_selection='univariate',
+                n_test=20, n_split=n_split, mean_size_clust=mean_size_clust,
+                split_ratio=.4, plot=False, alpha=.1)
+            print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
+            print('average fdr:', np.mean(fdr_array))
+            print('average recall:', np.mean(recall_array))
+            print('fwer:', np.mean(fdr_array > 0))
 
 
-def experiment_pr_curve():
+def experiment_roc_curve():
     # set various parameters
     n_samples = 100
     model_selection = 'multivariate'
@@ -204,5 +199,6 @@ def experiment_univariate_multivariate():
 
 
 if __name__ == '__main__':
-    experiment_pr_curve()
+    experiment_nominal_control()
+    # experiment_roc_curve()
     plt.show()
