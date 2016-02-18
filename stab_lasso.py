@@ -5,8 +5,9 @@ from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
-from fast_cluster import ReNN, recursive_nn
+#from fast_cluster import ReNN, recursive_nn
 
+import pdb
 
 def projection(X, k, connectivity, ward=True):
     """
@@ -43,15 +44,16 @@ def pp_inv(clust):
         (np.array(1. / parcellation_masks.sum(1)).squeeze(), 0),
         shape=(n_labels, n_labels))
 
-    P = inv_sum_col * parcellation_masks
     P_inv = parcellation_masks.T
+    P = inv_sum_col * parcellation_masks
+    
     return P, P_inv
 
 
 def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
                             beta_array, split_array, clust_array):
     """Main function to obtain p-values across splits """
-    # pdb.set_trace()
+    #pdb.set_trace()
     n, p = X.shape
     pvalues = np.ones((n_split, p))
     for i in range(n_split):
@@ -75,6 +77,7 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
 
         # fit the model on test data to get p-values
         res = sm.OLS(y_test, X_model).fit()
+        #print(res.summary())
         pvalues_proj = np.ones(n_clusters)
         pvalues_proj[model_proj] = np.clip(
             model_proj_size * res.pvalues, 0., 1.)
@@ -100,8 +103,8 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
     for i in range(n_split):
         split = np.zeros(n, dtype='bool')
         split[split_array[i]] = True
-        y_test = y[~split]
-        X_test = X[~split]
+        y_test = y#[~split]
+        X_test = X#[~split]
 
         # projection
         P, P_inv = pp_inv(clust_array[i])
