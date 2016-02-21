@@ -179,7 +179,7 @@ class stab_lasso(object):
             beta_model = beta_proj[model_proj]
 
             res = sm.OLS(y_test, X_model).fit()
-            #pdb.set_trace()
+            pdb.set_trace()
             pvalues_proj = np.ones(n_clusters)
             pvalues_proj[model_proj] = np.clip(model_proj_size * res.pvalues, 0., 1.)
 
