@@ -5,8 +5,10 @@ import matplotlib.pyplot as plt
 
 from plot_simulated_data import create_simulation_data, plot_slices
 from stab_lasso import StabilityLasso
+from old_stab_lasso import old_stab_lasso
 from sklearn.metrics import roc_curve
 
+import pdb
 
 def connectivity(size):
     from sklearn.feature_extraction import image
@@ -25,7 +27,7 @@ def test(model_selection='multivariate',
          snr=-20,
          rs=1,
          alpha=.05):
-    size = 40
+    size = 12
 
     k = int(size ** 3 / mean_size_clust)
 
@@ -36,6 +38,7 @@ def test(model_selection='multivariate',
     true_coeff = beta0 ** 2 > 0
     B = StabilityLasso(theta, n_split=n_split, ratio_split=split_ratio,
                        n_clusters=k, model_selection=model_selection)
+
     B.fit(X, y, connectivity_)
     beta = B._soln
 
@@ -136,12 +139,12 @@ def multiple_test(n_test,
 
 
 def experiment_nominal_control():
-    for n_split in [1, 10]:
-        for mean_size_clust in [1, 10]:
+    for n_split in [10, 1]:
+        for mean_size_clust in [10, 1]:
             fdr_array, recall_array = multiple_test(
-                model_selection='univariate',
-                n_test=20, n_split=n_split, mean_size_clust=mean_size_clust,
-                split_ratio=.4, plot=False, alpha=.1)
+                model_selection='multivariate',
+                n_test=1, n_split=n_split, mean_size_clust=mean_size_clust,
+                split_ratio=.4, plot=False, alpha=.1, theta=.1)
             print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
             print('average fdr:', np.mean(fdr_array))
             print('average recall:', np.mean(recall_array))

@@ -41,10 +41,11 @@ def pp_inv(clust):
         dtype=np.float32).tocsc()
 
     inv_sum_col = dia_matrix(
-        (np.array(1. / parcellation_masks.sum(1)).squeeze(), 0),
+        (np.array(1. / parcellation_masks.sum(0)).squeeze(), 0),
         shape=(n_labels, n_labels))
 
-    P_inv = parcellation_masks.T
+    P_inv = parcellation_masks.copy()
+    P_inv = P_inv.T
     P = inv_sum_col * parcellation_masks
     
     return P, P_inv
@@ -77,11 +78,12 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
 
         # fit the model on test data to get p-values
         res = sm.OLS(y_test, X_model).fit()
+        
         #print(res.summary())
         pvalues_proj = np.ones(n_clusters)
         pvalues_proj[model_proj] = np.clip(
             model_proj_size * res.pvalues, 0., 1.)
-
+        #pdb.set_trace()
         pvalues[i] = P_inv.dot(pvalues_proj)
 
     if n_split > 1:
@@ -103,8 +105,8 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
     for i in range(n_split):
         split = np.zeros(n, dtype='bool')
         split[split_array[i]] = True
-        y_test = y#[~split]
-        X_test = X#[~split]
+        y_test = y[~split]
+        X_test = X[~split]
 
         # projection
         P, P_inv = pp_inv(clust_array[i])
