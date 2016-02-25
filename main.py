@@ -49,12 +49,11 @@ def test(model_selection='multivariate',
     else:
         raise ValueError("This model selection method doesn't exist")
 
-
     if model_selection == 'univariate':
         selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
         # selected_model = B.select_model_fwer(alpha)
-        selected_model = B.select_model_fdr(alpha, normalize = False)
+        selected_model = B.select_model_fdr(alpha, normalize=False)
 
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
@@ -143,12 +142,12 @@ def experiment_nominal_control():
         for mean_size_clust in [10, 1]:
             fdr_array, recall_array = multiple_test(
                 model_selection='univariate',
-                n_test=10, n_split=n_split, mean_size_clust=mean_size_clust,
+                n_test=30, n_split=n_split, mean_size_clust=mean_size_clust,
                 split_ratio=.4, plot=False, alpha=.1, theta=.1, snr=0)
             print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
-            print('average fdr:', np.mean(fdr_array))
-            print('average recall:', np.mean(recall_array))
-            print('fwer:', np.mean(fdr_array > 0))
+            print('average fdr: %0.3f' % np.mean(fdr_array))
+            print('average recall: %0.3f' % np.mean(recall_array))
+            print('fwer: %0.3f' % np.mean(fdr_array > 0))
 
 
 def experiment_roc_curve():
