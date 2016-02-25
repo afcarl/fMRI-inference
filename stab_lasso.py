@@ -92,10 +92,50 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         pvalues_aggregated = pvalues[0]
     return pvalues, pvalues_aggregated
 
+def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
+                              beta_array, split_array, clust_array):
+    """Main function to obtain p-values across splits """
+    #pdb.set_trace()
+    n, p = X.shape
+    scores = np.ones((n_split, p))
+    for i in range(n_split):
+        # perform the split
+        split = np.zeros(n, dtype='bool')
+        split[split_array[i]] = True
+        y_test = y[~split]
+        X_test = X[~split]
+
+        # projection
+        P, P_inv = pp_inv(clust_array[i])
+
+        # get the support 
+        beta = beta_array[i]
+        beta_proj = P.dot(beta)
+        # this is very awkward
+        model_proj = (beta_proj ** 2 > 0)
+        model_proj_size = model_proj.sum()
+        X_test_proj = P.dot(X_test.T).T
+        X_model = X_test_proj[:, model_proj]
+
+        # fit the model on test data to get p-values
+        res = sm.OLS(y_test, X_model).fit()
+        
+        #print(res.summary())
+        scores_proj = p * np.ones(n_clusters)
+        scores_proj[model_proj] = model_proj_size * res.pvalues
+        #pdb.set_trace()
+        scores[i] = P_inv.dot(scores_proj)
+
+    if n_split > 1:
+        scores_aggregated = scores_aggregation(scores)
+    else:
+        scores_aggregated = scores[0]
+    return scores, scores_aggregated
+
 
 def univariate_split_pval(X, y, n_split, size_split, n_clusters,
-                         beta_array, split_array, clust_array,
-                          permute=False):
+                           beta_array, split_array, clust_array,
+                           permute=False):
     """Univariate p-values computation
     todo: replace permutations with analytical tests
     """
@@ -143,6 +183,16 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     q = pvalues_sorted.min(axis=0)
     q *= 1 - np.log(gamma_min)
     q = q.clip(0., 1.)
+    return q
+
+def scores_aggregation(scores, gamma_min=0.05):
+    n_split, p = scores.shape
+    kmin = max(1, int(gamma_min * n_split))
+    scores_sorted = np.sort(scores, axis=0)[kmin:]
+    gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
+    scores_sorted = scores_sorted / gamma_array[:, np.newaxis]
+    q = scores_sorted.min(axis=0)
+    q *= 1 - np.log(gamma_min)
     return q
 
 
@@ -334,6 +384,14 @@ class StabilityLasso(object):
         self._pvalues_aggregated = pvalues_aggregated
         return pvalues_aggregated
 
+    def multivariate_split_scores(self, X, y):
+        scores, scores_aggregated = multivariate_split_scores(
+            X, y, self.n_split, self.size_split, self.n_clusters,
+            self._beta_array, self._split_array, self._clust_array)
+        self._scores = scores
+        self._scores_aggregated = scores_aggregated
+        return scores_aggregated
+
     def univariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = univariate_split_pval(
             X, y, self.n_split, self.size_split, self.n_clusters,
@@ -347,4 +405,4 @@ class StabilityLasso(object):
         return self._pvalues_aggregated < (alpha / p)
 
     def select_model_fdr(self, q, normalize=True):
-        return (select_model_fdr(self._pvalues_aggregated, q))
+        return (select_model_fdr(self._pvalues_aggregated, q, normalize=normalize))
