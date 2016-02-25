@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 
 from plot_simulated_data import create_simulation_data, plot_slices
 from stab_lasso import StabilityLasso
-from old_stab_lasso import old_stab_lasso
 from sklearn.metrics import roc_curve
 
 import pdb
@@ -46,15 +45,21 @@ def test(model_selection='multivariate',
         pvals = B.univariate_split_pval(X, y)
     elif model_selection == 'multivariate':
         pvals = B.multivariate_split_pval(X, y)
+        #old_pvals = old_B.multivariate_split_pval()
     else:
         raise ValueError("This model selection method doesn't exist")
+
+    if model_selection == 'univariate':
+        scores = pvals
+    elif model_selection == 'multivariate':
+        scores = B.multivariate_split_scores(X, y)
 
 
     if model_selection == 'univariate':
         selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
-        # selected_model = B.select_model_fwer(alpha)
         selected_model = B.select_model_fdr(alpha, normalize = False)
+        
 
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
@@ -98,7 +103,7 @@ def test(model_selection='multivariate',
                     title="Ground truth")
         plt.show()
 
-    return fdr, recall, pvals, true_coeff
+    return fdr, recall, pvals, scores, true_coeff
 
 
 def multiple_test(n_test,
@@ -115,10 +120,11 @@ def multiple_test(n_test,
     fdr_array = []
     recall_array = []
     pvals = []
+    scores = []
     true_coeffs = []
 
     for i in range(n_test):
-        fdr, recall, pval, true_coeff = test(
+        fdr, recall, pval, score, true_coeff = test(
             model_selection=model_selection,
             n_samples=n_samples,
             n_split=n_split,
@@ -133,17 +139,18 @@ def multiple_test(n_test,
         fdr_array.append(fdr)
         recall_array.append(recall)
         pvals.append(pval)
+        scores.append(score)
         true_coeffs.append(true_coeff)
 
     return np.array(fdr_array), np.array(recall_array)
 
 
 def experiment_nominal_control():
-    for n_split in [10, 1]:
-        for mean_size_clust in [10, 1]:
+    for n_split in [2, 10]:
+        for mean_size_clust in [1, 10]:
             fdr_array, recall_array = multiple_test(
                 model_selection='multivariate',
-                n_test=1, n_split=n_split, mean_size_clust=mean_size_clust,
+                n_test=20, n_split=n_split, mean_size_clust=mean_size_clust,
                 split_ratio=.4, plot=False, alpha=.1, theta=.1)
             print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
             print('average fdr:', np.mean(fdr_array))
@@ -155,6 +162,7 @@ def experiment_roc_curve():
     # set various parameters
     n_samples = 100
     model_selection = 'multivariate'
+    roc_type = 'pvals' # 'pvals' or 'scores'
     n_test = 20
     split_ratio = .4
     theta = 0.1
@@ -162,13 +170,14 @@ def experiment_roc_curve():
     rs_start = 1
 
     ax = plt.subplot(111)
-    for n_split in [1, 10]:
+    for n_split in [2, 10]:
         for mean_size_clust in [1, 10]:
             # collect results
             pvals = []
+            scores = []
             true_coeffs = []
             for i in range(n_test):
-                fdr, recall, pval, true_coeff = test(
+                fdr, recall, pval, score, true_coeff = test(
                     model_selection=model_selection,
                     n_samples=n_samples,
                     n_split=n_split,
@@ -180,11 +189,16 @@ def experiment_roc_curve():
                     print_results=False,
                     plot=False)
                 pvals.append(pval)
+                scores.append(score)
                 true_coeffs.append(true_coeff)
                 n_clusters = pval.size / mean_size_clust
 
-            fpr, tpr, thresholds = roc_curve(
-                np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
+            if roc_type == 'pvals':
+                fpr, tpr, thresholds = roc_curve(
+                    np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
+            if roc_type == 'scores':
+                fpr, tpr, thresholds = roc_curve(
+                    np.concatenate(true_coeffs), 12**3 - np.concatenate(scores))
             ax.plot(fpr, tpr, label='n_split=%d, %d clusters' % (
                     n_split, n_clusters))
     ax.plot([0, 1], [0, 1], 'k--')
@@ -202,6 +216,6 @@ def experiment_univariate_multivariate():
 
 
 if __name__ == '__main__':
-    experiment_nominal_control()
-    # experiment_roc_curve()
+    # experiment_nominal_control()
+    experiment_roc_curve()
     plt.show()
