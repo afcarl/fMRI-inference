@@ -66,7 +66,7 @@ def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
     X += noise
     X -= X.mean(axis=-1)[:, np.newaxis]
     X /= X.std(axis=-1)[:, np.newaxis]
-    return X, np.ravel(y), snr, noise, w, size
+    return X, np.ravel(y_), snr, noise, w.sum(0)[np.newaxis], size
 
 
 def plot_slices(data, title=None):

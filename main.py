@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from plot_simulated_data import create_simulation_data, plot_slices
 from stab_lasso import StabilityLasso
-from old_stab_lasso import old_stab_lasso
+# from old_stab_lasso import old_stab_lasso
 from sklearn.metrics import roc_curve
 
 import pdb
@@ -24,7 +24,7 @@ def test(model_selection='multivariate',
          split_ratio=.4,
          mean_size_clust=1,
          theta=0.1,
-         snr=-20,
+         snr=-10,
          rs=1,
          alpha=.05):
     size = 12
@@ -32,7 +32,7 @@ def test(model_selection='multivariate',
     k = int(size ** 3 / mean_size_clust)
 
     X, y, snr, noise, beta0, size = \
-        create_simulation_data(snr, n_samples, size, rs)
+        create_simulation_data(snr, n_samples, size, rs, modulation=True)
 
     connectivity_ = connectivity(size)
     true_coeff = beta0 ** 2 > 0
@@ -142,9 +142,9 @@ def experiment_nominal_control():
     for n_split in [10, 1]:
         for mean_size_clust in [10, 1]:
             fdr_array, recall_array = multiple_test(
-                model_selection='multivariate',
-                n_test=1, n_split=n_split, mean_size_clust=mean_size_clust,
-                split_ratio=.4, plot=False, alpha=.1, theta=.1)
+                model_selection='univariate',
+                n_test=10, n_split=n_split, mean_size_clust=mean_size_clust,
+                split_ratio=.4, plot=False, alpha=.1, theta=.1, snr=0)
             print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
             print('average fdr:', np.mean(fdr_array))
             print('average recall:', np.mean(recall_array))
