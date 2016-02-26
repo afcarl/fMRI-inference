@@ -9,6 +9,7 @@ from sklearn.metrics import roc_curve
 
 import pdb
 
+
 def connectivity(size):
     from sklearn.feature_extraction import image
     connectivity = image.grid_to_graph(n_x=size, n_y=size, n_z=size)
@@ -156,19 +157,18 @@ def experiment_nominal_control():
             print('fwer: %0.3f' % np.mean(fdr_array > 0))
 
 
-def experiment_roc_curve():
+def experiment_roc_curve(model_selection='multivariate'):
     # set various parameters
     n_samples = 100
-    model_selection = 'multivariate'
     roc_type = 'pvals'  # 'pvals' or 'scores'
     n_test = 20
     split_ratio = .4
     theta = 0.1
-    snr = - 10
+    snr = 10
     rs_start = 1
 
     ax = plt.subplot(111)
-    for n_split in [2, 10]:
+    for n_split in [1, 10]:
         for mean_size_clust in [1, 10]:
             # collect results
             pvals = []
@@ -188,7 +188,7 @@ def experiment_roc_curve():
                     plot=False)
                 pvals.append(pval)
                 scores.append(score)
-                true_coeffs.append(true_coeff)
+                true_coeffs.append(true_coeff.ravel())
                 n_clusters = pval.size / mean_size_clust
 
             if roc_type == 'pvals':
@@ -216,5 +216,6 @@ def experiment_univariate_multivariate():
 
 if __name__ == '__main__':
     # experiment_nominal_control()
-    experiment_roc_curve()
+    experiment_roc_curve('univariate')
+    experiment_roc_curve('multivariate')
     plt.show()
