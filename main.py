@@ -162,7 +162,7 @@ def experiment_roc_curve():
     # set various parameters
     n_samples = 100
     model_selection = 'multivariate'
-    roc_type = 'pvals' # 'pvals' or 'scores'
+    roc_type = 'scores' # 'pvals' or 'scores'
     n_test = 20
     split_ratio = .4
     theta = 0.1
@@ -170,8 +170,8 @@ def experiment_roc_curve():
     rs_start = 1
 
     ax = plt.subplot(111)
-    for n_split in [2, 10]:
-        for mean_size_clust in [1, 10]:
+    for n_split in [2, 10, 50]:
+        for mean_size_clust in [1, 5, 10]:
             # collect results
             pvals = []
             scores = []
