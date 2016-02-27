@@ -9,6 +9,7 @@ from sklearn.metrics import roc_curve
 
 import pdb
 
+
 def connectivity(size):
     from sklearn.feature_extraction import image
     connectivity = image.grid_to_graph(n_x=size, n_y=size, n_z=size)
@@ -31,7 +32,7 @@ def test(model_selection='multivariate',
     k = int(size ** 3 / mean_size_clust)
 
     X, y, snr, noise, beta0, size = \
-        create_simulation_data(snr, n_samples, size, rs)
+        create_simulation_data(snr, n_samples, size, rs, modulation=True)
 
     connectivity_ = connectivity(size)
     true_coeff = beta0 ** 2 > 0
@@ -58,8 +59,7 @@ def test(model_selection='multivariate',
     if model_selection == 'univariate':
         selected_model = B.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
-        selected_model = B.select_model_fdr(alpha, normalize = False)
-        
+        selected_model = B.select_model_fdr(alpha, normalize=False)
 
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
@@ -153,25 +153,24 @@ def experiment_nominal_control():
                 n_test=20, n_split=n_split, mean_size_clust=mean_size_clust,
                 split_ratio=.4, plot=False, alpha=.1, theta=.1)
             print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
-            print('average fdr:', np.mean(fdr_array))
-            print('average recall:', np.mean(recall_array))
-            print('fwer:', np.mean(fdr_array > 0))
+            print('average fdr: %0.3f' % np.mean(fdr_array))
+            print('average recall: %0.3f' % np.mean(recall_array))
+            print('fwer: %0.3f' % np.mean(fdr_array > 0))
 
 
-def experiment_roc_curve():
+def experiment_roc_curve(model_selection='multivariate'):
     # set various parameters
     n_samples = 100
-    model_selection = 'multivariate'
-    roc_type = 'scores' # 'pvals' or 'scores'
+    roc_type = 'pvals'  # 'pvals' or 'scores'
     n_test = 20
     split_ratio = .4
     theta = 0.1
-    snr = - 10
+    snr = 10
     rs_start = 1
 
     ax = plt.subplot(111)
-    for n_split in [2, 10, 50]:
-        for mean_size_clust in [1, 5, 10]:
+    for n_split in [1, 10]:
+        for mean_size_clust in [1, 10]:
             # collect results
             pvals = []
             scores = []
@@ -190,7 +189,7 @@ def experiment_roc_curve():
                     plot=False)
                 pvals.append(pval)
                 scores.append(score)
-                true_coeffs.append(true_coeff)
+                true_coeffs.append(true_coeff.ravel())
                 n_clusters = pval.size / mean_size_clust
 
             if roc_type == 'pvals':
@@ -198,7 +197,8 @@ def experiment_roc_curve():
                     np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
             if roc_type == 'scores':
                 fpr, tpr, thresholds = roc_curve(
-                    np.concatenate(true_coeffs), 12**3 - np.concatenate(scores))
+                    np.concatenate(true_coeffs),
+                    12 ** 3 - np.concatenate(scores))
             ax.plot(fpr, tpr, label='n_split=%d, %d clusters' % (
                     n_split, n_clusters))
     ax.plot([0, 1], [0, 1], 'k--')
@@ -217,5 +217,6 @@ def experiment_univariate_multivariate():
 
 if __name__ == '__main__':
     # experiment_nominal_control()
-    experiment_roc_curve()
+    experiment_roc_curve('univariate')
+    experiment_roc_curve('multivariate')
     plt.show()
