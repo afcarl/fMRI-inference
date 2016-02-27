@@ -5,7 +5,7 @@ from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
-#from fast_cluster import ReNN, recursive_nn
+
 
 import pdb
 
@@ -18,8 +18,9 @@ def projection(X, k, connectivity, ward=True):
     if ward:
         clustering = FeatureAgglomeration(
             linkage='ward', n_clusters=k, connectivity=connectivity)
-        labels = clustering.fit(X).labels_
+        labels = clustering.fit(<X).labels_
     else:
+        from fast_cluster import ReNN, recursive_nn
         _, labels = recursive_nn(connectivity, X, n_clusters=k)
 
     #
@@ -47,7 +48,7 @@ def pp_inv(clust):
     P_inv = parcellation_masks.copy()
     P_inv = P_inv.T
     P = inv_sum_col * parcellation_masks
-    
+
     return P, P_inv
 
 
@@ -78,8 +79,6 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
 
         # fit the model on test data to get p-values
         res = sm.OLS(y_test, X_model).fit()
-        
-        #print(res.summary())
         pvalues_proj = np.ones(n_clusters)
         pvalues_proj[model_proj] = np.clip(
             model_proj_size * res.pvalues, 0., 1.)
