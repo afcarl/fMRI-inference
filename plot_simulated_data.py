@@ -50,7 +50,7 @@ def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
     ### Generate the signal y and X
     y_ = generator.randn(n_samples, 1)
     if modulation:
-        y = y_ * generator.rand(n_samples, 5)
+        y = y_ * generator.rand(n_samples, 5) **4
     else:
         y = y_
 

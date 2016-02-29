@@ -5,7 +5,7 @@ from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
-#from fast_cluster import ReNN, recursive_nn
+
 
 import pdb
 
@@ -18,8 +18,9 @@ def projection(X, k, connectivity, ward=True):
     if ward:
         clustering = FeatureAgglomeration(
             linkage='ward', n_clusters=k, connectivity=connectivity)
-        labels = clustering.fit(X).labels_
+        labels = clustering.fit(<X).labels_
     else:
+        from fast_cluster import ReNN, recursive_nn
         _, labels = recursive_nn(connectivity, X, n_clusters=k)
 
     #
@@ -47,7 +48,7 @@ def pp_inv(clust):
     P_inv = parcellation_masks.copy()
     P_inv = P_inv.T
     P = inv_sum_col * parcellation_masks
-    
+
     return P, P_inv
 
 
@@ -78,16 +79,11 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
 
         # fit the model on test data to get p-values
         res = sm.OLS(y_test, X_model).fit()
-        
         pvalues_proj = np.ones(n_clusters)
-        if n_split == 1:
-            pvalues_proj[model_proj] = res.pvalues
-        else:
-            
-            pvalues_proj[model_proj] = np.clip(
-                model_proj_size * res.pvalues, 0., 1.)
-        pvalues[i] = P_inv.dot(pvalues_proj)
+        pvalues_proj[model_proj] = np.clip(
+            model_proj_size * res.pvalues, 0., 1.)
         #pdb.set_trace()
+        pvalues[i] = P_inv.dot(pvalues_proj)
 
     if n_split > 1:
         pvalues_aggregated = pvalues_aggregation(pvalues)
@@ -195,7 +191,6 @@ def scores_aggregation(scores, gamma_min=0.05):
     gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
     scores_sorted = scores_sorted / gamma_array[:, np.newaxis]
     q = scores_sorted.min(axis=0)
-    
     q *= 1 - np.log(gamma_min)
     return q
 
@@ -221,7 +216,6 @@ def select_model_fdr(pvalues, q, independant=False, normalize=True):
 
 
     """
-    #pdb.set_trace()
     p, = pvalues.shape
     pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
     if not independant:
