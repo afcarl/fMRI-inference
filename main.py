@@ -198,23 +198,6 @@ def experiment_roc_curve(model_selection='multivariate'):
             pvals = [res_[2] for res_ in res]
             scores = [res_[3] for res_ in res]
             true_coeffs = [res_[4] for res_ in res]
-            """
-            for i in range(n_test):
-                fdr, recall, pval, score, true_coeff = test(
-                    model_selection=model_selection,
-                    n_samples=n_samples,
-                    n_split=n_split,
-                    split_ratio=split_ratio,
-                    mean_size_clust=mean_size_clust,
-                    theta=theta,
-                    snr=snr,
-                    rs=rs_start + i,
-                    print_results=False,
-                    plot=False)
-                pvals.append(pval)
-                scores.append(score)
-                true_coeffs.append(true_coeff.ravel())
-            """
             n_clusters = pvals[0].size / mean_size_clust
 
             if roc_type == 'pvals':
