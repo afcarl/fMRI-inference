@@ -79,12 +79,15 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         # fit the model on test data to get p-values
         res = sm.OLS(y_test, X_model).fit()
         
-        #print(res.summary())
         pvalues_proj = np.ones(n_clusters)
-        pvalues_proj[model_proj] = np.clip(
-            model_proj_size * res.pvalues, 0., 1.)
-        #pdb.set_trace()
+        if n_split == 1:
+            pvalues_proj[model_proj] = res.pvalues
+        else:
+            
+            pvalues_proj[model_proj] = np.clip(
+                model_proj_size * res.pvalues, 0., 1.)
         pvalues[i] = P_inv.dot(pvalues_proj)
+        #pdb.set_trace()
 
     if n_split > 1:
         pvalues_aggregated = pvalues_aggregation(pvalues)
@@ -94,7 +97,7 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
 
 def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
                               beta_array, split_array, clust_array):
-    """Main function to obtain p-values across splits """
+    """Main function to obtain scores across splits """
     #pdb.set_trace()
     n, p = X.shape
     scores = np.ones((n_split, p))
@@ -192,6 +195,7 @@ def scores_aggregation(scores, gamma_min=0.05):
     gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
     scores_sorted = scores_sorted / gamma_array[:, np.newaxis]
     q = scores_sorted.min(axis=0)
+    
     q *= 1 - np.log(gamma_min)
     return q
 
@@ -217,6 +221,7 @@ def select_model_fdr(pvalues, q, independant=False, normalize=True):
 
 
     """
+    #pdb.set_trace()
     p, = pvalues.shape
     pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
     if not independant:
@@ -405,4 +410,7 @@ class StabilityLasso(object):
         return self._pvalues_aggregated < (alpha / p)
 
     def select_model_fdr(self, q, normalize=True):
-        return (select_model_fdr(self._pvalues_aggregated, q, normalize=normalize))
+        return select_model_fdr(self._pvalues_aggregated, q, normalize=normalize)
+
+    def select_model_fdr_scores(self, q, normalize=True):
+        return select_model_fdr(self._scores_aggregated, q, normalize=normalize)
