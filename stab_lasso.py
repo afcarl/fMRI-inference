@@ -18,7 +18,7 @@ def projection(X, k, connectivity, ward=True):
     if ward:
         clustering = FeatureAgglomeration(
             linkage='ward', n_clusters=k, connectivity=connectivity)
-        labels = clustering.fit(<X).labels_
+        labels = clustering.fit(X).labels_
     else:
         from fast_cluster import ReNN, recursive_nn
         _, labels = recursive_nn(connectivity, X, n_clusters=k)
@@ -185,13 +185,26 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     return q
 
 def scores_aggregation(scores, gamma_min=0.05):
+    ###################
+    ##### WARNING #####
+    ###################
+    # THIS IS FOR DEBUGGING
+    true_model = np.array([   0,    1,   12,   13,  130,  131,  142,  143,  144,  145,  156,
+                              157,  274,  275,  286,  287,  785,  786,  797,  798,  929,  930,
+                              941,  942, 1450, 1451, 1462, 1463, 1560, 1561, 1572, 1573, 1594,
+                              1595, 1606, 1607, 1704, 1705, 1716, 1717])
+    
     n_split, p = scores.shape
     kmin = max(1, int(gamma_min * n_split))
     scores_sorted = np.sort(scores, axis=0)[kmin:]
     gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
     scores_sorted = scores_sorted / gamma_array[:, np.newaxis]
-    q = scores_sorted.min(axis=0)
-    q *= 1 - np.log(gamma_min)
+    #q = scores_sorted.min(axis=0)
+    #scores_argmin = scores_sorted.argmin(axis=0)
+    #print scores_argmin[true_model]
+    #q *= 1 - np.log(gamma_min)
+    #pdb.set_trace()
+    q = scores_sorted[0]
     return q
 
 
@@ -218,8 +231,8 @@ def select_model_fdr(pvalues, q, independant=False, normalize=True):
     """
     p, = pvalues.shape
     pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
-    if not independant:
-        q = q / np.log(p)
+    # if not independant:
+    #     q = q / np.log(p)
     if normalize:
         q = q / p
 
@@ -247,6 +260,7 @@ def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
     pvalues_sorted = pvalues[pvalues_argsort]
     pvalues_sorted = pvalues_sorted / np.arange(1, p + 1)
 
+    #pdb.set_trace()
     bounds_sorted = pvalues_sorted
     for i in range(p-1, 0, -1):
         bounds_sorted[i-1] = min(bounds_sorted[i-1], bounds_sorted[i])
@@ -405,6 +419,9 @@ class StabilityLasso(object):
 
     def select_model_fdr(self, q, normalize=True):
         return select_model_fdr(self._pvalues_aggregated, q, normalize=normalize)
+
+    def select_model_fdr_bounds_scores(self, normalize=False):
+        return select_model_fdr_bounds(self._scores_aggregated, normalize=normalize)
 
     def select_model_fdr_scores(self, q, normalize=True):
         return select_model_fdr(self._scores_aggregated, q, normalize=normalize)
