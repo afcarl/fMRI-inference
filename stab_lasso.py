@@ -68,7 +68,7 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         # projection
         P, P_inv = pp_inv(clust_array[i])
 
-        # get the support 
+        # get the support
         beta_proj = beta_array[i]
         model_proj = (beta_proj ** 2 > 0)
         model_proj_size = model_proj.sum()
