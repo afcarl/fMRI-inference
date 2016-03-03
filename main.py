@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from plot_simulated_data import create_simulation_data, plot_slices
 from stab_lasso import StabilityLasso, select_model_fdr
 from sklearn.metrics import roc_curve
+from scipy.stats import pearsonr
+from joblib import Parallel, delayed
 
 import pdb
 
@@ -187,33 +189,30 @@ def experiment_roc_curve(model_selection='multivariate'):
     ax = plt.subplot(111)
     for n_split in [1, 10]:
         for mean_size_clust in [1, 10]:
-            # collect results
-            pvals = []
-            scores = []
-            true_coeffs = []
-            for i in range(n_test):
-                fdr, recall, pval, score, true_coeff = test(
-                    model_selection=model_selection,
-                    n_samples=n_samples,
-                    n_split=n_split,
-                    split_ratio=split_ratio,
-                    mean_size_clust=mean_size_clust,
-                    theta=theta,
-                    snr=snr,
-                    rs=rs_start + i,
-                    print_results=False,
-                    plot=False)
-                pvals.append(pval)
-                scores.append(score)
-                true_coeffs.append(true_coeff.ravel())
-                n_clusters = pval.size / mean_size_clust
+            # fdr, recall, pval, score, true_coeff
+            res = Parallel(n_jobs=1)(
+                delayed(test)(model_selection=model_selection,
+                              n_samples=n_samples,
+                              n_split=n_split,
+                              split_ratio=split_ratio,
+                              mean_size_clust=mean_size_clust,
+                              theta=theta,
+                              snr=snr,
+                              rs=rs_start + i,
+                              print_results=False,
+                              plot=False) for i in range(n_test))
+            pvals = [res_[2] for res_ in res]
+            scores = [res_[3] for res_ in res]
+            true_coeffs = [res_[4] for res_ in res]
+            n_clusters = pvals[0].size / mean_size_clust
 
             if roc_type == 'pvals':
                 fpr, tpr, thresholds = roc_curve(
-                    np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
+                    np.concatenate(true_coeffs, 1),
+                    1 - np.concatenate(pvals, 1))
             if roc_type == 'scores':
                 fpr, tpr, thresholds = roc_curve(
-                    np.concatenate(true_coeffs),
+                    np.concatenate(true_coeffs, 1).ravel(),
                     true_coeffs[0].size - np.concatenate(scores))
             linewidth = 1
             if model_selection == 'multivariate':

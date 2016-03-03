@@ -18,7 +18,7 @@ def projection(X, k, connectivity, ward=True):
     if ward:
         clustering = FeatureAgglomeration(
             linkage='ward', n_clusters=k, connectivity=connectivity)
-        labels = clustering.fit(<X).labels_
+        labels = clustering.fit(X).labels_
     else:
         from fast_cluster import ReNN, recursive_nn
         _, labels = recursive_nn(connectivity, X, n_clusters=k)
@@ -68,10 +68,8 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         # projection
         P, P_inv = pp_inv(clust_array[i])
 
-        # get the support 
-        beta = beta_array[i]
-        beta_proj = P.dot(beta)
-        # this is very awkward
+        # get the support
+        beta_proj = beta_array[i]
         model_proj = (beta_proj ** 2 > 0)
         model_proj_size = model_proj.sum()
         X_test_proj = P.dot(X_test.T).T
@@ -108,9 +106,7 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
         P, P_inv = pp_inv(clust_array[i])
 
         # get the support 
-        beta = beta_array[i]
-        beta_proj = P.dot(beta)
-        # this is very awkward
+        beta_proj = beta_array[i]
         model_proj = (beta_proj ** 2 > 0)
         model_proj_size = model_proj.sum()
         X_test_proj = P.dot(X_test.T).T
@@ -118,7 +114,6 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
 
         # fit the model on test data to get p-values
         res = sm.OLS(y_test, X_model).fit()
-        
         #print(res.summary())
         scores_proj = p * np.ones(n_clusters)
         scores_proj[model_proj] = model_proj_size * res.pvalues
@@ -344,9 +339,10 @@ class StabilityLasso(object):
             self.n_clusters = p
         theta = self.theta
 
-        beta_array = np.zeros((n_split, p))
+        beta_array = np.zeros((n_split, self.n_clusters))
         split_array = np.zeros((n_split, self.size_split), dtype=int)
         clust_array = np.zeros((n_split, p), dtype=int)
+        self._soln = np.zeros(p)
 
         for i in range(n_split):
             split = self.generator.choice(n, self.size_split, replace=False)
@@ -364,12 +360,12 @@ class StabilityLasso(object):
             beta_proj = lasso_splitted.coef_
             beta = P_inv.dot(beta_proj)
 
-            beta_array[i] = beta
+            beta_array[i] = beta_proj
             split_array[i] = split
             clust_array[i] = labels
+            self._soln += beta
 
-        beta = beta_array.mean(axis=0)
-        self._soln = beta
+        self._soln /= n_split
         self._beta_array = beta_array
         self._split_array = split_array
         self._clust_array = clust_array
