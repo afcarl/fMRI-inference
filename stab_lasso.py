@@ -231,8 +231,8 @@ def select_model_fdr(pvalues, q, independant=False, normalize=True):
     """
     p, = pvalues.shape
     pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
-    # if not independant:
-    #     q = q / np.log(p)
+    if not independant:
+        q = q / np.log(p)
     if normalize:
         q = q / p
 

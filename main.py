@@ -74,10 +74,8 @@ def test(model_selection='multivariate',
             selected_model = B.select_model_fdr(alpha, normalize=False)
         elif control_type == 'scores':
             selected_model = B.select_model_fdr_scores(alpha, normalize=False)
-            bounds = B.select_model_fdr_bounds_scores(normalize=False)
 
-    bounds_model = bounds[true_coeff.reshape((size**3,))]
-    # pdb.set_trace()
+
     
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
@@ -171,7 +169,7 @@ def experiment_nominal_control(control_type='scores'):
             fdr_array, recall_array = multiple_test(
                 model_selection='multivariate', control_type='scores',
                 n_test=20, n_split=n_split, mean_size_clust=mean_size_clust,
-                split_ratio=.4, plot=False, alpha=.1, theta=.1, snr=10)
+                split_ratio=.4, plot=False, alpha=.1, theta=.9, snr=-10)
             print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
             print('average fdr: %0.3f' % np.mean(fdr_array))
             print('average recall: %0.3f' % np.mean(recall_array))
@@ -184,7 +182,7 @@ def experiment_roc_curve(model_selection='multivariate'):
     roc_type = 'scores'  # 'pvals' or 'scores'
     n_test = 20
     split_ratio = .4
-    theta = 0.1
+    theta = 0.8
     snr = - 10
     rs_start = 1
 
@@ -269,9 +267,9 @@ def anova_curve():
 
 
 if __name__ == '__main__':
-     experiment_nominal_control(control_type='scores')
+    experiment_nominal_control(control_type='scores')
     #anova_curve()
     #experiment_roc_curve('univariate')
     #experiment_roc_curve('multivariate')
     #plt.savefig('roc_curves.png')
-    #plt.show()
+    plt.show()
