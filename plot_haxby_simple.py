@@ -22,10 +22,12 @@ labels = np.recfromcsv(haxby_dataset.session_target[0], delimiter=" ")
 # target = labels['labels']
 _, target = np.unique(labels['labels'], return_inverse=True)
 
+
 # Keep only data corresponding to faces or cats
 condition_mask = np.logical_or(labels['labels'] == b'face',
                                labels['labels'] == b'house')
 target = target[condition_mask]
+sessions = labels['chunks'][condition_mask]
 
 
 ###########################################################################
@@ -38,25 +40,64 @@ nifti_masker = NiftiMasker(mask_img=mask_filename, standardize=True,
                            memory='cache', verbose=10)
 
 func_filename = haxby_dataset.func[0]
-# We give the nifti_masker a filename and retrieve a 2D array ready
-# for machine learning with scikit-learn
+
 fmri_masked = nifti_masker.fit_transform(func_filename)
 
 # Restrict the classification to the face vs cat discrimination
 fmri_masked = fmri_masked[condition_mask]
 
+# Compute connectivity matrix: which voxel is connected to which
+import nibabel
+mask = nibabel.load(mask_filename).get_data()
+from sklearn.feature_extraction import image
+shape = mask.shape
+connectivity = image.grid_to_graph(n_x=shape[0], n_y=shape[1],
+                                   n_z=shape[2], mask=mask)
+
+###########################################################################
+# Univariate testing on all the sessions
+
+from sklearn.feature_selection import f_classif
+f_score, p_val = f_classif(fmri_masked, target)
+p_val_img = nifti_masker.inverse_transform(p_val)
+bonferroni_thr = .05 / mask.sum()
+
+pseudo_truth = p_val < bonferroni_thr
+pseudo_truth_img = nifti_masker.inverse_transform(pseudo_truth)
+
 ###########################################################################
 # The decoding
 
-# Here we use a Support Vector Classification, with a linear kernel
-from stab_lasso import StabilityLasso
-model = StabilityLasso(theta=.5)
+# Use a reduced dataset
+session_mask = np.in1d(sessions, [1, 7])
+this_data = fmri_masked[session_mask]
+this_target = target[session_mask]
 
-# And we run it
-model.fit(fmri_masked, target)
+from stab_lasso import StabilityLasso
+model = StabilityLasso(theta=.2)
+
+model.fit(this_data, this_target, connectivity=connectivity)
+
+###########################################################################
+# Back to neuroimaging
+
+beta_img = nifti_masker.inverse_transform(model._soln)
+
+beta_img.to_filename('soln.nii.gz')
+
+from nilearn import plotting
+display = plotting.plot_stat_map(beta_img,
+                                 bg_img=haxby_dataset['anat'][0],
+                                 cut_coords=(33, -34, -16))
+
+# Hack: avoid outlining the brain by negating
+display.add_contours(pseudo_truth_img,
+                     levels=[.5], colors='c')
+
+display.savefig('beta.png')
+display.close()
 
 stop
-prediction = model.predict(fmri_masked)
 
 ###########################################################################
 # Compute prediction scores using cross-validation

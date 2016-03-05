@@ -353,7 +353,7 @@ class StabilityLasso(object):
     alpha = 0.05
 
     def __init__(self, theta, n_split=100, ratio_split=.5,
-                 n_clusters='auto', model_selection='multivariate', 
+                 n_clusters='0.1', model_selection='multivariate',
                  random_state=1):
         """
 
@@ -400,11 +400,16 @@ class StabilityLasso(object):
         n, p = X.shape
         n_split = self.n_split
         self.size_split = n * self.ratio_split
-        if self.n_clusters == 'auto':
-            self.n_clusters = p
+        self.n_clusters_ = self.n_clusters
+        if isinstance(self.n_clusters, basestring):
+            if self.n_clusters_ == 'auto':
+                self.n_clusters_ = p
+            else:
+                self.n_clusters_ = int(eval('%s * p' % self.n_clusters_,
+                                        dict(p=p)))
         theta = self.theta
 
-        beta_array = np.zeros((n_split, self.n_clusters))
+        beta_array = np.zeros((n_split, self.n_clusters_))
         split_array = np.zeros((n_split, self.size_split), dtype=int)
         clust_array = np.zeros((n_split, p), dtype=int)
         self._soln = np.zeros(p)
@@ -416,7 +421,7 @@ class StabilityLasso(object):
             y_splitted, X_splitted = y[split], X[split]
 
             P_inv, X_proj, labels = projection(
-                X_splitted, self.n_clusters, connectivity)
+                X_splitted, self.n_clusters_, connectivity)
 
             alpha = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted))) / n
             lasso_splitted = Lasso(alpha=alpha)
@@ -438,7 +443,7 @@ class StabilityLasso(object):
 
     def multivariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = multivariate_split_pval(
-            X, y, self.n_split, self.size_split, self.n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters_,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pvalues_aggregated = pvalues_aggregated
@@ -446,7 +451,7 @@ class StabilityLasso(object):
 
     def multivariate_split_scores(self, X, y):
         scores, scores_aggregated = multivariate_split_scores(
-            X, y, self.n_split, self.size_split, self.n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters_,
             self._beta_array, self._split_array, self._clust_array)
         self._scores = scores
         self._scores_aggregated = scores_aggregated
@@ -454,7 +459,7 @@ class StabilityLasso(object):
 
     def univariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = univariate_split_pval(
-            X, y, self.n_split, self.size_split, self.n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters_,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pvalues_aggregated = pvalues_aggregated
