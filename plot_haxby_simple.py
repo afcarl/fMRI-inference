@@ -69,7 +69,7 @@ pseudo_truth_img = nifti_masker.inverse_transform(pseudo_truth)
 # The decoding
 
 # Use a reduced dataset
-session_mask = np.in1d(sessions, [1, 7])
+session_mask = np.in1d(sessions, [1, 3, 5, 7, 9, 11])
 this_data = fmri_masked[session_mask]
 this_target = target[session_mask]
 

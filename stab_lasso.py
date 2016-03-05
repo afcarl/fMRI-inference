@@ -5,6 +5,7 @@ from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
+from sklearn.preprocessing import LabelBinarizer
 
 
 import pdb
@@ -397,6 +398,8 @@ class StabilityLasso(object):
 
 
         """
+        self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
+        y = self._label_binarizer.fit_transform(y)
         n, p = X.shape
         n_split = self.n_split
         self.size_split = n * self.ratio_split
@@ -477,3 +480,8 @@ class StabilityLasso(object):
 
     def select_model_fdr_scores(self, q, normalize=True):
         return select_model_fdr(self._scores_aggregated, q, normalize=normalize)
+
+    @property
+    def classes_(self):
+        return self._label_binarizer.classes_
+
