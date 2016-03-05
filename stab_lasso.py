@@ -107,8 +107,15 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
 
         # get the support 
         beta_proj = beta_array[i]
+        
+        
         model_proj = (beta_proj ** 2 > 0)
         model_proj_size = model_proj.sum()
+
+        beta = P_inv.dot(beta_proj)
+        model = (beta **2 > 0)
+        model_size = model.sum()
+        
         X_test_proj = P.dot(X_test.T).T
         X_model = X_test_proj[:, model_proj]
 
@@ -116,7 +123,8 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
         res = sm.OLS(y_test, X_model).fit()
         #print(res.summary())
         scores_proj = p * np.ones(n_clusters)
-        scores_proj[model_proj] = model_proj_size * res.pvalues
+        #scores_proj[model_proj] = model_proj_size * res.pvalues
+        scores_proj[model_proj] = model_size * res.pvalues
         #pdb.set_trace()
         scores[i] = P_inv.dot(scores_proj)
 
@@ -166,6 +174,49 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
     else:
         pvalues_aggregated = pvalues[0]
     return pvalues, pvalues_aggregated
+
+
+
+def univariate_split_scores(X, y, n_split, size_split, n_clusters,
+                           beta_array, split_array, clust_array,
+                           permute=False):
+    """Univariate p-values computation
+    todo: replace permutations with analytical tests
+    """
+    n, p = X.shape
+    scores = np.ones((n_split, p))
+    n_perm = 10000
+    for i in range(n_split):
+        split = np.zeros(n, dtype='bool')
+        split[split_array[i]] = True
+        y_test = y[~split]
+        X_test = X[~split]
+
+        # projection
+        P, P_inv = pp_inv(clust_array[i])
+
+        X_test_proj = P.dot(X_test.T).T
+        corr_true = np.abs(np.dot(y_test, X_test_proj).reshape(
+                (n_clusters)))
+
+        if permute:
+            corr_perm = np.zeros((n_perm, n_clusters))
+            for s in range(n_perm):
+                perm = np.random.permutation(int(n - size_split))
+                corr_perm[s] = np.dot(y_test.T, X_test_proj[perm])
+            corr_perm = np.abs(corr_perm)
+            scores_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
+        else:
+            scores_proj = np.array([pearsonr(y_test, x)[1]
+                                     for x in X_test_proj.T])
+        scores[i, :] = P_inv.dot(scores_proj)
+
+    if n_split > 1:
+        pvalues_aggregated = pvalues_aggregation(pvalues)
+    else:
+        pvalues_aggregated = pvalues[0]
+    return pvalues, pvalues_aggregated
+
 
 
 def pvalues_aggregation(pvalues, gamma_min=0.05):
