@@ -35,7 +35,7 @@ def test(model_selection='multivariate',
     k = int(size ** 3 / mean_size_clust)
 
     X, y, snr, noise, beta0, size = \
-        create_simulation_data(snr, n_samples, size, rs, modulation=False)
+        create_simulation_data(snr, n_samples, size, rs, modulation=True)
     true_coeff = beta0 ** 2 > 0
 
     if model_selection == 'anova':
@@ -266,9 +266,9 @@ def anova_curve():
 
 
 if __name__ == '__main__':
-    experiment_nominal_control(control_type='scores')
-    #anova_curve()
-    #experiment_roc_curve('univariate')
-    #experiment_roc_curve('multivariate')
-    #plt.savefig('roc_curves.png')
+    #experiment_nominal_control(control_type='scores')
+    anova_curve()
+    experiment_roc_curve('univariate')
+    experiment_roc_curve('multivariate')
+    plt.savefig('roc_curves.png')
     plt.show()
