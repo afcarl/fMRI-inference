@@ -5,6 +5,7 @@ from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
+from sklearn.preprocessing import LabelBinarizer
 
 
 import pdb
@@ -107,8 +108,15 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
 
         # get the support 
         beta_proj = beta_array[i]
+        
+        
         model_proj = (beta_proj ** 2 > 0)
         model_proj_size = model_proj.sum()
+
+        beta = P_inv.dot(beta_proj)
+        model = (beta **2 > 0)
+        model_size = model.sum()
+        
         X_test_proj = P.dot(X_test.T).T
         X_model = X_test_proj[:, model_proj]
 
@@ -116,7 +124,8 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
         res = sm.OLS(y_test, X_model).fit()
         #print(res.summary())
         scores_proj = p * np.ones(n_clusters)
-        scores_proj[model_proj] = model_proj_size * res.pvalues
+        #scores_proj[model_proj] = model_proj_size * res.pvalues
+        scores_proj[model_proj] = model_size * res.pvalues
         #pdb.set_trace()
         scores[i] = P_inv.dot(scores_proj)
 
@@ -166,6 +175,49 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
     else:
         pvalues_aggregated = pvalues[0]
     return pvalues, pvalues_aggregated
+
+
+
+def univariate_split_scores(X, y, n_split, size_split, n_clusters,
+                           beta_array, split_array, clust_array,
+                           permute=False):
+    """Univariate p-values computation
+    todo: replace permutations with analytical tests
+    """
+    n, p = X.shape
+    scores = np.ones((n_split, p))
+    n_perm = 10000
+    for i in range(n_split):
+        split = np.zeros(n, dtype='bool')
+        split[split_array[i]] = True
+        y_test = y[~split]
+        X_test = X[~split]
+
+        # projection
+        P, P_inv = pp_inv(clust_array[i])
+
+        X_test_proj = P.dot(X_test.T).T
+        corr_true = np.abs(np.dot(y_test, X_test_proj).reshape(
+                (n_clusters)))
+
+        if permute:
+            corr_perm = np.zeros((n_perm, n_clusters))
+            for s in range(n_perm):
+                perm = np.random.permutation(int(n - size_split))
+                corr_perm[s] = np.dot(y_test.T, X_test_proj[perm])
+            corr_perm = np.abs(corr_perm)
+            scores_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
+        else:
+            scores_proj = np.array([pearsonr(y_test, x)[1]
+                                     for x in X_test_proj.T])
+        scores[i, :] = P_inv.dot(scores_proj)
+
+    if n_split > 1:
+        pvalues_aggregated = pvalues_aggregation(pvalues)
+    else:
+        pvalues_aggregated = pvalues[0]
+    return pvalues, pvalues_aggregated
+
 
 
 def pvalues_aggregation(pvalues, gamma_min=0.05):
@@ -302,7 +354,7 @@ class StabilityLasso(object):
     alpha = 0.05
 
     def __init__(self, theta, n_split=100, ratio_split=.5,
-                 n_clusters='auto', model_selection='multivariate', 
+                 n_clusters='0.1', model_selection='multivariate',
                  random_state=1):
         """
 
@@ -346,14 +398,21 @@ class StabilityLasso(object):
 
 
         """
+        self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
+        y = self._label_binarizer.fit_transform(y)
         n, p = X.shape
         n_split = self.n_split
         self.size_split = n * self.ratio_split
-        if self.n_clusters == 'auto':
-            self.n_clusters = p
+        self.n_clusters_ = self.n_clusters
+        if isinstance(self.n_clusters, basestring):
+            if self.n_clusters_ == 'auto':
+                self.n_clusters_ = p
+            else:
+                self.n_clusters_ = int(eval('%s * p' % self.n_clusters_,
+                                        dict(p=p)))
         theta = self.theta
 
-        beta_array = np.zeros((n_split, self.n_clusters))
+        beta_array = np.zeros((n_split, self.n_clusters_))
         split_array = np.zeros((n_split, self.size_split), dtype=int)
         clust_array = np.zeros((n_split, p), dtype=int)
         self._soln = np.zeros(p)
@@ -365,7 +424,7 @@ class StabilityLasso(object):
             y_splitted, X_splitted = y[split], X[split]
 
             P_inv, X_proj, labels = projection(
-                X_splitted, self.n_clusters, connectivity)
+                X_splitted, self.n_clusters_, connectivity)
 
             alpha = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted))) / n
             lasso_splitted = Lasso(alpha=alpha)
@@ -387,7 +446,7 @@ class StabilityLasso(object):
 
     def multivariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = multivariate_split_pval(
-            X, y, self.n_split, self.size_split, self.n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters_,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pvalues_aggregated = pvalues_aggregated
@@ -395,7 +454,7 @@ class StabilityLasso(object):
 
     def multivariate_split_scores(self, X, y):
         scores, scores_aggregated = multivariate_split_scores(
-            X, y, self.n_split, self.size_split, self.n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters_,
             self._beta_array, self._split_array, self._clust_array)
         self._scores = scores
         self._scores_aggregated = scores_aggregated
@@ -403,7 +462,7 @@ class StabilityLasso(object):
 
     def univariate_split_pval(self, X, y):
         pvalues, pvalues_aggregated = univariate_split_pval(
-            X, y, self.n_split, self.size_split, self.n_clusters,
+            X, y, self.n_split, self.size_split, self.n_clusters_,
             self._beta_array, self._split_array, self._clust_array)
         self._pvalues = pvalues
         self._pvalues_aggregated = pvalues_aggregated
@@ -421,3 +480,8 @@ class StabilityLasso(object):
 
     def select_model_fdr_scores(self, q, normalize=True):
         return select_model_fdr(self._scores_aggregated, q, normalize=normalize)
+
+    @property
+    def classes_(self):
+        return self._label_binarizer.classes_
+

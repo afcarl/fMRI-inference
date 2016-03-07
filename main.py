@@ -189,8 +189,8 @@ def experiment_roc_curve(model_selection='multivariate'):
     rs_start = 1
 
     ax = plt.subplot(111)
-    for n_split in [1, 10]:
-        for mean_size_clust in [1, 10]:
+    for n_split in [1, 20]:
+        for mean_size_clust in [1, 5, 10]:
             # fdr, recall, pval, score, true_coeff
             res = Parallel(n_jobs=1)(
                 delayed(test)(model_selection=model_selection,
@@ -268,7 +268,7 @@ def anova_curve():
 if __name__ == '__main__':
     #experiment_nominal_control(control_type='scores')
     anova_curve()
-    experiment_roc_curve('univariate')
+    #experiment_roc_curve('univariate')
     experiment_roc_curve('multivariate')
     plt.savefig('roc_curves.png')
     plt.show()
