@@ -399,7 +399,7 @@ class StabilityLasso(object):
 
         """
         self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
-        y = self._label_binarizer.fit_transform(y)
+        #y = self._label_binarizer.fit_transform(y)
         n, p = X.shape
         n_split = self.n_split
         self.size_split = n * self.ratio_split

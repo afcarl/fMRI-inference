@@ -20,10 +20,8 @@ import nibabel
 ###############################################################################
 # Function to generate data
 def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
-                           modulation=False):
+                           modulation=False, roi_size=2, smooth_X=1):
     generator = check_random_state(random_state)
-    roi_size = 2
-    smooth_X = 1
     ### Coefs
     w = np.zeros((size, size, size, 5))
     w[0:roi_size, 0:roi_size, 0:roi_size, 0] = -0.6
@@ -42,7 +40,7 @@ def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
     X_ = generator.randn(n_samples, size, size, size)
     noise = []
     for i in range(n_samples):
-        Xi = ndimage.filters.gaussian_filter(X_[i, :, :, :], smooth_X)
+        Xi = ndimage.filters.gaussian_filter(X_[i], smooth_X)
         Xi = Xi.ravel()
         noise.append(Xi)
 
@@ -50,7 +48,8 @@ def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
     ### Generate the signal y and X
     y_ = generator.randn(n_samples, 1)
     if modulation:
-        y = y_ * generator.rand(n_samples, 5) **4
+        modulation_ = generator.rand(n_samples, 5)
+        y = y_ * (.1 + .9 * (modulation_ == modulation_.max(0)))
     else:
         y = y_
 

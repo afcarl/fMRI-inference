@@ -268,7 +268,7 @@ def anova_curve():
 if __name__ == '__main__':
     #experiment_nominal_control(control_type='scores')
     anova_curve()
-    #experiment_roc_curve('univariate')
+    experiment_roc_curve('univariate')
     experiment_roc_curve('multivariate')
     plt.savefig('roc_curves.png')
     plt.show()
