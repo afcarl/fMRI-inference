@@ -36,12 +36,11 @@ def projection(X, k, connectivity, ward=True):
 def pp_inv(clust):
     p = np.size(clust)
     n_labels = len(np.unique(clust))
-
+    
     parcellation_masks = coo_matrix(
         (np.ones(p), (clust, np.arange(p))),
         shape=(n_labels, p),
         dtype=np.float32).tocsc()
-
     inv_sum_col = dia_matrix(
         (np.array(1. / parcellation_masks.sum(0)).squeeze(), 0),
         shape=(n_labels, n_labels))
@@ -49,7 +48,7 @@ def pp_inv(clust):
     P_inv = parcellation_masks.copy()
     P_inv = P_inv.T
     P = inv_sum_col * parcellation_masks
-
+    
     return P, P_inv
 
 
@@ -390,12 +389,11 @@ class StabilityLasso(object):
     def fit(self, X, y, connectivity=None, **lasso_args):
         """
 
-        y : np.float(n)
-            The target, in the model $y = X\beta$
-
         X : np.float((n, p))
             The data, in the model $y = X\beta$
 
+        y : np.float(n)
+            The target, in the model $y = X\beta$
 
         """
         self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
@@ -422,14 +420,12 @@ class StabilityLasso(object):
             split.sort()
 
             y_splitted, X_splitted = y[split], X[split]
-
             P_inv, X_proj, labels = projection(
                 X_splitted, self.n_clusters_, connectivity)
-
+            
             alpha = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted))) / n
             lasso_splitted = Lasso(alpha=alpha)
             lasso_splitted.fit(X_proj, y_splitted)
-
             beta_proj = lasso_splitted.coef_
             beta = P_inv.dot(beta_proj)
 
