@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.linear_model import Lasso
+from sklearn.linear_model import Lasso, LinearRegression
 from sklearn.cluster import FeatureAgglomeration, AgglomerativeClustering
 from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
@@ -105,17 +105,13 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
         # projection
         P, P_inv = pp_inv(clust_array[i])
 
-        # get the support 
+        # get the support
         beta_proj = beta_array[i]
-        
-        
         model_proj = (beta_proj ** 2 > 0)
-        model_proj_size = model_proj.sum()
 
         beta = P_inv.dot(beta_proj)
-        model = (beta **2 > 0)
+        model = (beta ** 2 > 0)
         model_size = model.sum()
-        
         X_test_proj = P.dot(X_test.T).T
         X_model = X_test_proj[:, model_proj]
 
@@ -176,7 +172,6 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
     return pvalues, pvalues_aggregated
 
 
-
 def univariate_split_scores(X, y, n_split, size_split, n_clusters,
                            beta_array, split_array, clust_array,
                            permute=False):
@@ -208,15 +203,14 @@ def univariate_split_scores(X, y, n_split, size_split, n_clusters,
             scores_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
         else:
             scores_proj = np.array([pearsonr(y_test, x)[1]
-                                     for x in X_test_proj.T])
+                                    for x in X_test_proj.T])
         scores[i, :] = P_inv.dot(scores_proj)
 
     if n_split > 1:
-        pvalues_aggregated = pvalues_aggregation(pvalues)
+        pvalues_aggregated = pvalues_aggregation(scores)
     else:
-        pvalues_aggregated = pvalues[0]
-    return pvalues, pvalues_aggregated
-
+        pvalues_aggregated = scores[0]
+    return scores, pvalues_aggregated
 
 
 def pvalues_aggregation(pvalues, gamma_min=0.05):
@@ -230,16 +224,8 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     q = q.clip(0., 1.)
     return q
 
+
 def scores_aggregation(scores, gamma_min=0.05):
-    ###################
-    ##### WARNING #####
-    ###################
-    # THIS IS FOR DEBUGGING
-    true_model = np.array([   0,    1,   12,   13,  130,  131,  142,  143,  144,  145,  156,
-                              157,  274,  275,  286,  287,  785,  786,  797,  798,  929,  930,
-                              941,  942, 1450, 1451, 1462, 1463, 1560, 1561, 1572, 1573, 1594,
-                              1595, 1606, 1607, 1704, 1705, 1716, 1717])
-    
     n_split, p = scores.shape
     kmin = max(1, int(gamma_min * n_split))
     scores_sorted = np.sort(scores, axis=0)[kmin:]
@@ -308,8 +294,8 @@ def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
 
     #pdb.set_trace()
     bounds_sorted = pvalues_sorted
-    for i in range(p-1, 0, -1):
-        bounds_sorted[i-1] = min(bounds_sorted[i-1], bounds_sorted[i])
+    for i in range(p - 1, 0, - 1):
+        bounds_sorted[i - 1] = min(bounds_sorted[i - 1], bounds_sorted[i])
 
     bounds = np.zeros(p)
     bounds[pvalues_argsort] = bounds_sorted
@@ -348,7 +334,7 @@ def test_select_model_fdr_bounds():
     return bool_array
 
 
-class StabilityLasso(object):
+class StabilityLasso(LinearRegression):
 
     alpha = 0.05
 
@@ -396,8 +382,13 @@ class StabilityLasso(object):
             The target, in the model $y = X\beta$
 
         """
-        self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
+        #self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
         #y = self._label_binarizer.fit_transform(y)
+
+        X, y, X_mean, y_mean, X_std = self._center_data(
+            X, y, True, True, True)
+        self.intercept_ = y_mean
+
         n, p = X.shape
         n_split = self.n_split
         self.size_split = n * self.ratio_split
@@ -422,7 +413,6 @@ class StabilityLasso(object):
             y_splitted, X_splitted = y[split], X[split]
             P_inv, X_proj, labels = projection(
                 X_splitted, self.n_clusters_, connectivity)
-            
             alpha = theta * np.max(np.abs(np.dot(X_proj.T, y_splitted))) / n
             lasso_splitted = Lasso(alpha=alpha)
             lasso_splitted.fit(X_proj, y_splitted)
@@ -438,6 +428,8 @@ class StabilityLasso(object):
         self._beta_array = beta_array
         self._split_array = split_array
         self._clust_array = clust_array
+        self.coef_ = self._soln
+        
         return self
 
     def multivariate_split_pval(self, X, y):

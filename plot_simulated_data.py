@@ -49,7 +49,7 @@ def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
     y_ = generator.randn(n_samples, 1)
     if modulation:
         modulation_ = generator.rand(n_samples, 5)
-        y = y_ * (.1 + .9 * (modulation_ == modulation_.max(0)))
+        y = y_ * (.1 + .9 * (modulation_.T >= modulation_.max(1))).T
     else:
         y = y_
 

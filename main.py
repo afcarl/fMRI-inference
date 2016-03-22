@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from plot_simulated_data import create_simulation_data, plot_slices
 from stab_lasso import StabilityLasso, select_model_fdr
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, precision_recall_curve
 from scipy.stats import pearsonr
 from joblib import Parallel, delayed
 
@@ -29,7 +29,7 @@ def test(model_selection='multivariate',
          theta=0.1,
          snr=-10,
          rs=1,
-         alpha=.05):
+         alpha=.2):
     size = 12
 
     k = int(size ** 3 / mean_size_clust)
@@ -77,8 +77,6 @@ def test(model_selection='multivariate',
         elif control_type == 'scores':
             selected_model = B.select_model_fdr_scores(alpha, normalize=False)
 
-
-    
     beta_corrected = np.zeros(size ** 3)
     if len(selected_model) > 0:
         beta_corrected[selected_model] = beta[selected_model]
@@ -106,13 +104,13 @@ def test(model_selection='multivariate',
         print("| Feature ID |       p-value      |")
         for i in range(size ** 3):
             if true_discovery[i]:
-                print("|   "+str(i).zfill(4)+"   |  "+str(pvals[i])+"  |")
+                print("|   " + str(i).zfill(4) + "   |  "+str(pvals[i]) + "  |")
         print("-----------------------------------------------")
         print("FALSE DISCOVERY")
         print("| Feature ID |       p-value      |")
         for i in range(size ** 3):
             if false_discovery[i]:
-                print("|   "+str(i).zfill(4)+"   |  "+str(pvals[i])+"  |")
+                print("|   " + str(i).zfill(4) + "   |  "+str(pvals[i]) + "  |")
         print("-----------------------------------------------")
     if plot:
         coef_est = np.reshape(beta_corrected, [size, size, size])
@@ -166,22 +164,23 @@ def multiple_test(n_test,
 
 
 def experiment_nominal_control(control_type='scores'):
-    for n_split in [10]:
+    for n_split in [20]:
         for mean_size_clust in [10]:
-            fdr_array, recall_array = multiple_test(
-                model_selection='multivariate', control_type='scores',
-                n_test=20, n_split=n_split, mean_size_clust=mean_size_clust,
-                split_ratio=.4, plot=False, alpha=.1, theta=.9, snr=-10)
-            print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
-            print('average fdr: %0.3f' % np.mean(fdr_array))
-            print('average recall: %0.3f' % np.mean(recall_array))
-            print('fwer: %0.3f' % np.mean(fdr_array > 0))
+            for model_selection in ['univariate', 'multivariate']:
+                fdr_array, recall_array = multiple_test(
+                    model_selection=model_selection, control_type='scores',
+                    n_test=20, n_split=n_split,
+                    mean_size_clust=mean_size_clust,
+                    split_ratio=.4, plot=False, alpha=1., theta=.9, snr=-10)
+                print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
+                print('average fdr: %0.3f' % np.mean(fdr_array))
+                print('average recall: %0.3f' % np.mean(recall_array))
+                print('fwer: %0.3f' % np.mean(fdr_array > 0))
 
 
-def experiment_roc_curve(model_selection='multivariate'):
+def experiment_roc_curve(model_selection='multivariate', roc_type='scores'):
     # set various parameters
     n_samples = 100
-    roc_type = 'scores'  # 'pvals' or 'scores'
     n_test = 20
     split_ratio = .4
     theta = 0.8
@@ -212,8 +211,12 @@ def experiment_roc_curve(model_selection='multivariate'):
                 fpr, tpr, thresholds = roc_curve(
                     np.concatenate(true_coeffs, 1),
                     1 - np.concatenate(pvals, 1))
-            if roc_type == 'scores':
+            elif roc_type == 'scores':
                 fpr, tpr, thresholds = roc_curve(
+                    np.concatenate(true_coeffs, 1).ravel(),
+                    true_coeffs[0].size - np.concatenate(scores))
+            elif roc_type == 'pr':
+                fpr, tpr, _ = precision_recall_curve(
                     np.concatenate(true_coeffs, 1).ravel(),
                     true_coeffs[0].size - np.concatenate(scores))
             linewidth = 1
@@ -230,7 +233,7 @@ def experiment_roc_curve(model_selection='multivariate'):
     ax.set_title('ROC curves. split ratio = %1.1f' % split_ratio)
 
 
-def anova_curve():
+def anova_curve(roc_type='scores'):
     # set various parameters
     n_samples = 100
     n_test = 20
@@ -254,7 +257,8 @@ def anova_curve():
         scores.append(score)
         true_coeffs.append(true_coeff.ravel())
 
-    fpr, tpr, thresholds = roc_curve(
+    curve = roc_curve if roc_type == 'scores' else precision_recall_curve
+    fpr, tpr, _ = curve(
         np.concatenate(true_coeffs), 1 - np.concatenate(pvals))
     ax.plot(fpr, tpr, '--', label='anova')
     ax.plot([0, 1], [0, 1], 'k--')
@@ -266,9 +270,11 @@ def anova_curve():
 
 
 if __name__ == '__main__':
-    #experiment_nominal_control(control_type='scores')
+    experiment_nominal_control(control_type='scores')
+    """
     anova_curve()
     experiment_roc_curve('univariate')
     experiment_roc_curve('multivariate')
     plt.savefig('roc_curves.png')
     plt.show()
+    """
