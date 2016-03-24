@@ -14,6 +14,8 @@ from sklearn.feature_selection import f_classif
 from sklearn.feature_extraction import image
 from nilearn import datasets
 from nilearn.input_data import NiftiMasker
+from nilearn.image import mean_img
+from nilearn.plotting import plot_roi, plot_stat_map, show
 
 from stab_lasso import StabilityLasso
 
@@ -72,7 +74,7 @@ session_mask = np.in1d(sessions, [1, 3, 5, 7, 9, 11])
 this_data = fmri_masked[session_mask]
 this_target = target[session_mask]
 
-"""
+
 model = StabilityLasso(theta=.1, n_split=10, n_clusters=2000)
 model.fit(this_data, this_target, connectivity=connectivity)
 
@@ -95,7 +97,7 @@ display.add_contours(pseudo_truth_img,
 
 display.savefig('beta.png')
 display.close()
-"""
+
 ###########################################################################
 # Compute prediction scores using cross-validation
 
@@ -107,7 +109,7 @@ cv_scores = []
 for train, test in cv:
     model = StabilityLasso(theta=.1, n_split=10, n_clusters=2000)
     model.fit(fmri_masked[train], target[train], connectivity=connectivity)
-    prediction = model.predict(fmri_masked[test])
+    prediction = 3 + (model.predict(fmri_masked[test]) > 3.5)
     cv_scores.append(np.sum(prediction == target[test])
                      / float(np.size(target[test])))
 print(cv_scores)
@@ -126,14 +128,10 @@ coef_img.to_filename('haxby_model_weights.nii')
 
 ###########################################################################
 # Visualize the discriminating weights over the mean EPI
-from nilearn.image import mean_img
-from nilearn.plotting import plot_roi, plot_stat_map, show
 
 mean_epi = mean_img(func_filename)
 plot_stat_map(coef_img, mean_epi, title="SVM weights", display_mode="yx")
 
-###########################################################################
-# Plot also the mask that was computed by the NiftiMasker
-plot_roi(nifti_masker.mask_img_, mean_epi, title="Mask", display_mode="yx")
+
 
 show()
