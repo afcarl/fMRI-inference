@@ -107,7 +107,7 @@ cv_scores = []
 for train, test in cv:
     model = StabilityLasso(theta=.1, n_split=10, n_clusters=2000)
     model.fit(fmri_masked[train], target[train], connectivity=connectivity)
-    prediction = model.predict(fmri_masked[test])
+    prediction = 3 + (model.predict(fmri_masked[test]) > 3.5)
     cv_scores.append(np.sum(prediction == target[test])
                      / float(np.size(target[test])))
 print(cv_scores)
