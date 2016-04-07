@@ -137,7 +137,7 @@ plot_stat_map(coef_img, mean_epi, title="SVM weights", display_mode="yx")
 
 from sklearn.cross_validation import LabelShuffleSplit
 from sklearn import metrics
-slo = LabelShuffleSplit(sessions, n_iter=10, test_size=0.25,
+slo = LabelShuffleSplit(sessions, n_iter=10, train_size=0.25,
                         random_state=0)
 
 # run a model on all the data
@@ -152,8 +152,8 @@ for train, _ in slo:
 
 auc = []
 for coef in coefs:
-    fpr, tpr, _ = precision_recall_curve(coef_all, coef)
-    auc.append(metrics.auc(fpr, tpr))
+    fpr, tpr, _ = precision_recall_curve(coef_all, np.abs(coef))
+    auc.append(metrics.auc(fpr, tpr, reorder=True))
 
 print np.mean(auc)
 
