@@ -15,7 +15,9 @@ from sklearn.feature_extraction import image
 from nilearn import datasets
 from nilearn.input_data import NiftiMasker
 from nilearn.image import mean_img
-from nilearn.plotting import plot_roi, plot_stat_map, show
+from nilearn.plotting import plot_stat_map, show
+from nilearn import plotting
+from sklearn.metrics import precision_recall_curve
 
 from stab_lasso import StabilityLasso
 
@@ -74,19 +76,16 @@ session_mask = np.in1d(sessions, [1, 3, 5, 7, 9, 11])
 this_data = fmri_masked[session_mask]
 this_target = target[session_mask]
 
-
 model = StabilityLasso(theta=.1, n_split=10, n_clusters=2000)
 model.fit(this_data, this_target, connectivity=connectivity)
 
 ###########################################################################
 # Back to neuroimaging
-
+"""
 beta_img = nifti_masker.inverse_transform(model._soln)
 
 beta_img.to_filename('soln.nii.gz')
 
-
-from nilearn import plotting
 display = plotting.plot_stat_map(beta_img,
                                  bg_img=haxby_dataset['anat'][0],
                                  cut_coords=(33, -34, -16))
@@ -97,23 +96,23 @@ display.add_contours(pseudo_truth_img,
 
 display.savefig('beta.png')
 display.close()
-
+"""
 ###########################################################################
 # Compute prediction scores using cross-validation
 
-from sklearn.cross_validation import KFold
+from sklearn.cross_validation import KFold, LabelKFold
 
-cv = KFold(n=len(fmri_masked), n_folds=5)
+cv = LabelKFold(sessions, n_folds=6)
 cv_scores = []
 
 for train, test in cv:
-    model = StabilityLasso(theta=.1, n_split=10, n_clusters=2000)
     model.fit(fmri_masked[train], target[train], connectivity=connectivity)
     prediction = 3 + (model.predict(fmri_masked[test]) > 3.5)
     cv_scores.append(np.sum(prediction == target[test])
                      / float(np.size(target[test])))
 print(cv_scores)
-
+print(np.mean(cv_scores))
+"""
 ###########################################################################
 # Retrieve the discriminating weights and save them
 
@@ -131,7 +130,31 @@ coef_img.to_filename('haxby_model_weights.nii')
 
 mean_epi = mean_img(func_filename)
 plot_stat_map(coef_img, mean_epi, title="SVM weights", display_mode="yx")
+"""
 
+###########################################################################
+# Small sample recovery experiment
 
+from sklearn.cross_validation import LabelShuffleSplit
+from sklearn import metrics
+slo = LabelShuffleSplit(sessions, n_iter=10, test_size=0.25,
+                        random_state=0)
+
+# run a model on all the data
+model.fit(fmri_masked, target, connectivity=connectivity)
+# get the coefs:
+coef_all = model.coef_
+coef_all = np.abs(coef_all) > np.percentile(np.abs(coef_all), 10)
+coefs = []
+for train, _ in slo:
+    coefs.append(model.fit(fmri_masked[train], target[train],
+                           connectivity=connectivity).coef_)
+
+auc = []
+for coef in coefs:
+    fpr, tpr, _ = precision_recall_curve(coef_all, coef)
+    auc.append(metrics.auc(fpr, tpr))
+
+print np.mean(auc)
 
 show()
