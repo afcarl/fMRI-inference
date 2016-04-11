@@ -137,24 +137,26 @@ plot_stat_map(coef_img, mean_epi, title="SVM weights", display_mode="yx")
 
 from sklearn.cross_validation import LabelShuffleSplit
 from sklearn import metrics
-slo = LabelShuffleSplit(sessions, n_iter=10, train_size=0.25,
-                        random_state=0)
 
 # run a model on all the data
 model.fit(fmri_masked, target, connectivity=connectivity)
-# get the coefs:
-coef_all = model.coef_
-coef_all = np.abs(coef_all) > np.percentile(np.abs(coef_all), 10)
-coefs = []
-for train, _ in slo:
-    coefs.append(model.fit(fmri_masked[train], target[train],
-                           connectivity=connectivity).coef_)
 
-auc = []
-for coef in coefs:
-    fpr, tpr, _ = precision_recall_curve(coef_all, np.abs(coef))
-    auc.append(metrics.auc(fpr, tpr, reorder=True))
+for proportion in [1. / 6, 1./4, 1./3, 1./2]:
+    slo = LabelShuffleSplit(sessions, n_iter=10, train_size=proportion,
+                            random_state=0)
+    # get the coefs:
+    coef_all = model.coef_
+    bin_coef_all = np.abs(coef_all) > np.percentile(np.abs(coef_all), 10)
+    coefs = []
+    for train, _ in slo:
+        coefs.append(model.fit(fmri_masked[train], target[train],
+                               connectivity=connectivity).coef_)
 
-print np.mean(auc)
+    auc = []
+    for coef in coefs:
+        fpr, tpr, _ = precision_recall_curve(bin_coef_all, np.abs(coef))
+        auc.append(metrics.roc_auc_score(bin_coef_all, np.abs(coef)))
+
+    print(proportion, np.mean(auc))
 
 show()
