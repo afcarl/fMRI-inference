@@ -12,30 +12,31 @@ from joblib import Parallel, delayed
 import pdb
 
 
-def connectivity(size):
+def connectivity(shape):
     from sklearn.feature_extraction import image
-    connectivity = image.grid_to_graph(n_x=size, n_y=size, n_z=size)
+    connectivity = image.grid_to_graph(n_x=shape[0], n_y=shape[1], n_z=shape[2])
     return connectivity
 
 
-def test(model_selection='multivariate',
-         control_type='pvals',
-         plot=False,
-         print_results=True,
-         n_samples=100,
-         n_split=1,
-         split_ratio=.4,
-         mean_size_clust=1,
-         theta=0.1,
-         snr=-10,
-         rs=1,
-         alpha=.2):
-    size = 12
+def stat_test(model_selection='multivariate',
+              control_type='pvals',
+              plot=False,
+              print_results=True,
+              n_samples=100,
+              n_split=1,
+              split_ratio=.4,
+              mean_size_clust=1,
+              theta=0.1,
+              snr=-10,
+              rs=1,
+              alpha=.2,
+              shape=(12, 12, 12)):
 
-    k = int(size ** 3 / mean_size_clust)
+    size = np.prod(shape)
+    k = int(size / mean_size_clust)
 
-    X, y, snr, noise, beta0, size = \
-        create_simulation_data(snr, n_samples, size, rs, modulation=True)
+    X, y, snr, noise, beta0, _ = \
+        create_simulation_data(snr, n_samples, shape[0], rs, modulation=True)
     true_coeff = beta0 ** 2 > 0
 
     if model_selection == 'anova':
@@ -49,7 +50,7 @@ def test(model_selection='multivariate',
         recall = float(true_discovery.sum()) / np.sum(true_coeff)
         return fdr, recall, pvals, pvals, true_coeff
 
-    connectivity_ = connectivity(size)
+    connectivity_ = connectivity(shape)
     B = StabilityLasso(theta, n_split=n_split, ratio_split=split_ratio,
                        n_clusters=k, model_selection=model_selection)
 
@@ -77,7 +78,7 @@ def test(model_selection='multivariate',
         elif control_type == 'scores':
             selected_model = B.select_model_fdr_scores(alpha, normalize=False)
 
-    beta_corrected = np.zeros(size ** 3)
+    beta_corrected = np.zeros(size)
     if len(selected_model) > 0:
         beta_corrected[selected_model] = beta[selected_model]
         false_discovery = selected_model * (~true_coeff)
@@ -102,21 +103,20 @@ def test(model_selection='multivariate',
         print("-----------------------------------------------")
         print("TRUE DISCOVERY")
         print("| Feature ID |       p-value      |")
-        for i in range(size ** 3):
+        for i in range(size):
             if true_discovery[i]:
                 print("|   " + str(i).zfill(4) + "   |  "+str(pvals[i]) + "  |")
         print("-----------------------------------------------")
         print("FALSE DISCOVERY")
         print("| Feature ID |       p-value      |")
-        for i in range(size ** 3):
+        for i in range(size):
             if false_discovery[i]:
                 print("|   " + str(i).zfill(4) + "   |  "+str(pvals[i]) + "  |")
         print("-----------------------------------------------")
     if plot:
-        coef_est = np.reshape(beta_corrected, [size, size, size])
+        coef_est = np.reshape(beta_corrected, shape)
         plot_slices(coef_est, title="Estimated")
-        plot_slices(np.reshape(true_coeff, (size, size, size)),
-                    title="Ground truth")
+        plot_slices(np.reshape(true_coeff, shape), title="Ground truth")
         plt.show()
 
     return fdr, recall, pvals, scores, true_coeff
@@ -132,8 +132,56 @@ def multiple_test(n_test,
                   theta=0.1,
                   snr=-10,
                   rs_start=1,
-                  plot=False, 
-                  alpha=.05):
+                  plot=False,
+                  alpha=.05,
+                  shape=(12, 12, 12)):
+    """Runs several tests and accumulate results
+
+    Parameters
+    ----------
+    n_test: int,
+            The number of tests to run
+
+    model_selection: string, optional
+            the statistical etst performed at validation time
+            one of 'multivariate' (default) or 'univariate'
+            FIXME: can also be 'anova' ?
+
+    control_type: string, optional,
+            one of 'pvals',
+            FIXME: clarify role and values
+
+    n_samples: int, optional,
+            number of samples used in the simulations
+
+    n_split: int, optional,
+           number of splits in the bagging part of the method
+
+    split_ratio: float, optional
+            int the [0, 1] interval. Proportion of samples used for screening
+
+    mean_size_clust: int, optional,
+            Average cluster size when clustering is used.
+            Used to decide the number of clusters
+
+    theta: float, optional,
+           Regularization parameter. FIXME: check
+
+    snr: float, optional,
+         Signal to noise ration (in dB) of the simulated effect
+
+    rs_start: int, optional,
+              seed of rng for simulations. FIXME: check
+
+    plot: Bool, optional,
+          whether to plot the ROC/PR curves or not
+
+    alpha: float, optional
+           Desired fdr / Type 1 error rate
+
+    shape: tuple of int, optional,
+          shape of the data volume
+    """
     fdr_array = []
     recall_array = []
     pvals = []
@@ -141,7 +189,7 @@ def multiple_test(n_test,
     true_coeffs = []
 
     for i in range(n_test):
-        fdr, recall, pval, score, true_coeff = test(
+        fdr, recall, pval, score, true_coeff = stat_test(
             model_selection=model_selection,
             control_type=control_type,
             n_samples=n_samples,
@@ -153,7 +201,8 @@ def multiple_test(n_test,
             rs=rs_start + i,
             print_results=False,
             plot=plot,
-            alpha=alpha)
+            alpha=alpha,
+            shape=shape)
         fdr_array.append(fdr)
         recall_array.append(recall)
         pvals.append(pval)
@@ -164,6 +213,7 @@ def multiple_test(n_test,
 
 
 def experiment_nominal_control(control_type='scores'):
+    """This experiments checks empirically type I error rate/fdr"""
     for n_split in [20]:
         for mean_size_clust in [10]:
             for model_selection in ['univariate', 'multivariate']:
@@ -172,7 +222,8 @@ def experiment_nominal_control(control_type='scores'):
                     n_test=20, n_split=n_split,
                     mean_size_clust=mean_size_clust,
                     split_ratio=.4, plot=False, alpha=1., theta=.9, snr=-10)
-                print('cluster_size %d, n_split %d' % (mean_size_clust, n_split))
+                print('cluster_size %d, n_split %d' % (
+                        mean_size_clust, n_split))
                 print('average fdr: %0.3f' % np.mean(fdr_array))
                 print('average recall: %0.3f' % np.mean(recall_array))
                 print('fwer: %0.3f' % np.mean(fdr_array > 0))
@@ -192,7 +243,7 @@ def experiment_roc_curve(model_selection='multivariate', roc_type='scores'):
         for mean_size_clust in [1, 5, 10]:
             # fdr, recall, pval, score, true_coeff
             res = Parallel(n_jobs=1)(
-                delayed(test)(model_selection=model_selection,
+                delayed(stat_test)(model_selection=model_selection,
                               n_samples=n_samples,
                               n_split=n_split,
                               split_ratio=split_ratio,
@@ -246,7 +297,7 @@ def anova_curve(roc_type='scores'):
     scores = []
     true_coeffs = []
     for i in range(n_test):
-        fdr, recall, pval, score, true_coeff = test(
+        fdr, recall, pval, score, true_coeff = stat_test(
             model_selection='anova',
             n_samples=n_samples,
             snr=snr,
