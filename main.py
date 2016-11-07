@@ -11,6 +11,8 @@ from joblib import Parallel, delayed
 
 import pdb
 
+SHAPE = (12, 12, 12)
+
 
 def connectivity(shape):
     from sklearn.feature_extraction import image
@@ -30,7 +32,7 @@ def stat_test(model_selection='multivariate',
               snr=-10,
               rs=1,
               alpha=.2,
-              shape=(12, 12, 12)):
+              shape=SHAPE):
 
     size = np.prod(shape)
     k = int(size / mean_size_clust)
@@ -51,32 +53,34 @@ def stat_test(model_selection='multivariate',
         return fdr, recall, pvals, pvals, true_coeff
 
     connectivity_ = connectivity(shape)
-    B = StabilityLasso(theta, n_split=n_split, ratio_split=split_ratio,
-                       n_clusters=k, model_selection=model_selection)
+    stability_lasso = StabilityLasso(
+        theta, n_split=n_split, ratio_split=split_ratio,
+        n_clusters=k, model_selection=model_selection)
 
-    B.fit(X, y, connectivity_)
-    beta = B._soln
+    stability_lasso.fit(X, y, connectivity_)
+    beta = stability_lasso._soln
 
     if model_selection == 'univariate':
-        pvals = B.univariate_split_pval(X, y)
+        pvals = stability_lasso.univariate_split_pval(X, y)
     elif model_selection == 'multivariate':
-        pvals = B.multivariate_split_pval(X, y)
-        #old_pvals = old_B.multivariate_split_pval()
+        pvals = stability_lasso.multivariate_split_pval(X, y)
     else:
         raise ValueError("This model selection method doesn't exist")
 
     if model_selection == 'univariate':
         scores = pvals
     elif model_selection == 'multivariate':
-        scores = B.multivariate_split_scores(X, y)
+        scores = stability_lasso.multivariate_split_scores(X, y)
 
     if model_selection == 'univariate':
-        selected_model = B.select_model_fdr(alpha)
+        selected_model = stability_lasso.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
         if control_type == 'pvals':
-            selected_model = B.select_model_fdr(alpha, normalize=False)
+            selected_model = stability_lasso.select_model_fdr(
+                alpha, normalize=False)
         elif control_type == 'scores':
-            selected_model = B.select_model_fdr_scores(alpha, normalize=False)
+            selected_model = stability_lasso.select_model_fdr_scores(
+                alpha, normalize=False)
 
     beta_corrected = np.zeros(size)
     if len(selected_model) > 0:
@@ -134,7 +138,7 @@ def multiple_test(n_test,
                   rs_start=1,
                   plot=False,
                   alpha=.05,
-                  shape=(12, 12, 12)):
+                  shape=SHAPE):
     """Runs several tests and accumulate results
 
     Parameters
@@ -144,12 +148,13 @@ def multiple_test(n_test,
 
     model_selection: string, optional
             the statistical etst performed at validation time
-            one of 'multivariate' (default) or 'univariate'
-            FIXME: can also be 'anova' ?
+            one of 'multivariate' (default), 'univariate' or 'anova'
+            'Anova' refers to standard univariate screening as opposed to
+            high-dimensional regression
 
     control_type: string, optional,
-            one of 'pvals',
-            FIXME: clarify role and values
+            one of 'pvals', 'scores'
+            FIXME: clarify semantics
 
     n_samples: int, optional,
             number of samples used in the simulations
@@ -212,10 +217,11 @@ def multiple_test(n_test,
     return np.array(fdr_array), np.array(recall_array)
 
 
-def experiment_nominal_control(control_type='scores'):
+def experiment_nominal_control(control_type='scores', n_splits=[20],
+                               clust_sizes=[10]):
     """This experiments checks empirically type I error rate/fdr"""
-    for n_split in [20]:
-        for mean_size_clust in [10]:
+    for n_split in n_splits:
+        for mean_size_clust in clust_sizes:
             for model_selection in ['univariate', 'multivariate']:
                 fdr_array, recall_array = multiple_test(
                     model_selection=model_selection, control_type='scores',

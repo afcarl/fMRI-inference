@@ -16,11 +16,13 @@ from sklearn.utils import check_random_state
 
 import nibabel
 
+ROI_SIZE = 2
+
 
 ###############################################################################
 # Function to generate data
 def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
-                           modulation=False, roi_size=2, smooth_X=1):
+                           modulation=False, roi_size=ROI_SIZE, smooth_X=1):
     generator = check_random_state(random_state)
     ### Coefs
     w = np.zeros((size, size, size, 5))

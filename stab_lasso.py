@@ -7,8 +7,8 @@ import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
 from sklearn.preprocessing import LabelBinarizer
 
-
 import pdb
+
 
 def projection(X, k, connectivity, ward=True):
     """
@@ -429,7 +429,6 @@ class StabilityLasso(LinearRegression):
         self._split_array = split_array
         self._clust_array = clust_array
         self.coef_ = self._soln
-        
         return self
 
     def multivariate_split_pval(self, X, y):
@@ -461,13 +460,16 @@ class StabilityLasso(LinearRegression):
         return self._pvalues_aggregated < (alpha / p)
 
     def select_model_fdr(self, q, normalize=True):
-        return select_model_fdr(self._pvalues_aggregated, q, normalize=normalize)
+        return select_model_fdr(self._pvalues_aggregated, q,
+                                normalize=normalize)
 
     def select_model_fdr_bounds_scores(self, normalize=False):
-        return select_model_fdr_bounds(self._scores_aggregated, normalize=normalize)
+        return select_model_fdr_bounds(self._scores_aggregated,
+                                       normalize=normalize)
 
     def select_model_fdr_scores(self, q, normalize=True):
-        return select_model_fdr(self._scores_aggregated, q, normalize=normalize)
+        return select_model_fdr(self._scores_aggregated, q,
+                                normalize=normalize)
 
     @property
     def classes_(self):
