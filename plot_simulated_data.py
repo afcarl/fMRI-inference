@@ -17,29 +17,29 @@ from sklearn.utils import check_random_state
 import nibabel
 
 ROI_SIZE = 2
-
+SHAPE = (12, 12, 12)
 
 ###############################################################################
 # Function to generate data
-def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
+def create_simulation_data(snr=0, n_samples=200, shape=SHAPE, random_state=1,
                            modulation=False, roi_size=ROI_SIZE, smooth_X=1):
     generator = check_random_state(random_state)
     ### Coefs
-    w = np.zeros((size, size, size, 5))
+    w = np.zeros(shape + (5,))
     w[0:roi_size, 0:roi_size, 0:roi_size, 0] = -0.6
     w[-roi_size:, -roi_size:, 0:roi_size, 1] = 0.5
     w[0:roi_size, -roi_size:, -roi_size:, 2] = -0.6
     w[-roi_size:, 0:roi_size:, -roi_size:, 3] = 0.5
-    w[(size - roi_size) // 2:(size + roi_size) // 2,
-      (size - roi_size) // 2:(size + roi_size) // 2,
-      (size - roi_size) // 2:(size + roi_size) // 2, 4] = 0.5
+    w[(shape[0] - roi_size) // 2:(shape[0] + roi_size) // 2,
+      (shape[1] - roi_size) // 2:(shape[1] + roi_size) // 2,
+      (shape[2] - roi_size) // 2:(shape[2] + roi_size) // 2, 4] = 0.5
     if modulation:
         w = np.array([w_. ravel() for w_ in w.T])
     else:
         w = w.sum(-1).ravel()[np.newaxis]
 
     ### Generate smooth background noise
-    X_ = generator.randn(n_samples, size, size, size)
+    X_ = generator.randn(n_samples, shape[0], shape[1], shape[2])
     noise = []
     for i in range(n_samples):
         Xi = ndimage.filters.gaussian_filter(X_[i], smooth_X)
@@ -67,7 +67,7 @@ def create_simulation_data(snr=0, n_samples=200, size=12, random_state=1,
     X += noise
     X -= X.mean(axis=-1)[:, np.newaxis]
     X /= X.std(axis=-1)[:, np.newaxis]
-    return X, np.ravel(y_), snr, noise, w.sum(0)[np.newaxis], size
+    return X, np.ravel(y_), snr, noise, w.sum(0)[np.newaxis], shape
 
 
 def plot_slices(data, title=None):

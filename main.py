@@ -11,12 +11,13 @@ from joblib import Parallel, delayed
 
 import pdb
 
-SHAPE = (12, 12, 12)
+SHAPE = (6, 6, 6)
 
 
 def connectivity(shape):
     from sklearn.feature_extraction import image
-    connectivity = image.grid_to_graph(n_x=shape[0], n_y=shape[1], n_z=shape[2])
+    connectivity = image.grid_to_graph(n_x=shape[0], n_y=shape[1],
+                                       n_z=shape[2])
     return connectivity
 
 
@@ -38,7 +39,7 @@ def stat_test(model_selection='multivariate',
     k = int(size / mean_size_clust)
 
     X, y, snr, noise, beta0, _ = \
-        create_simulation_data(snr, n_samples, shape[0], rs, modulation=True)
+        create_simulation_data(snr, n_samples, shape, rs, modulation=True)
     true_coeff = beta0 ** 2 > 0
 
     if model_selection == 'anova':
@@ -131,7 +132,7 @@ def multiple_test(n_test,
                   control_type='pvals',
                   n_samples=100,
                   n_split=30,
-                  split_ratio=.4,
+                  split_ratio=.5,
                   mean_size_clust=1,
                   theta=0.1,
                   snr=-10,
@@ -218,18 +219,18 @@ def multiple_test(n_test,
 
 
 def experiment_nominal_control(control_type='scores', n_splits=[20],
-                               clust_sizes=[10]):
+                               clust_sizes=[1], n_test=20):
     """This experiments checks empirically type I error rate/fdr"""
     for n_split in n_splits:
         for mean_size_clust in clust_sizes:
             for model_selection in ['univariate', 'multivariate']:
                 fdr_array, recall_array = multiple_test(
                     model_selection=model_selection, control_type='scores',
-                    n_test=20, n_split=n_split,
+                    n_test=n_test, n_split=n_split,
                     mean_size_clust=mean_size_clust,
-                    split_ratio=.4, plot=False, alpha=1., theta=.9, snr=-10)
-                print('cluster_size %d, n_split %d' % (
-                        mean_size_clust, n_split))
+                    split_ratio=.5, plot=False, alpha=1., theta=.9, snr=-10)
+                print('model selection %s cluster_size %d, n_split %d' % (
+                        model_selection, mean_size_clust, n_split))
                 print('average fdr: %0.3f' % np.mean(fdr_array))
                 print('average recall: %0.3f' % np.mean(recall_array))
                 print('fwer: %0.3f' % np.mean(fdr_array > 0))
@@ -327,7 +328,7 @@ def anova_curve(roc_type='scores'):
 
 
 if __name__ == '__main__':
-    experiment_nominal_control(control_type='scores')
+    experiment_nominal_control(control_type='scores', clust_sizes=[1])
     """
     anova_curve()
     experiment_roc_curve('univariate')

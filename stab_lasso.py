@@ -36,7 +36,6 @@ def projection(X, k, connectivity, ward=True):
 def pp_inv(clust):
     p = np.size(clust)
     n_labels = len(np.unique(clust))
-    
     parcellation_masks = coo_matrix(
         (np.ones(p), (clust, np.arange(p))),
         shape=(n_labels, p),
@@ -48,7 +47,6 @@ def pp_inv(clust):
     P_inv = parcellation_masks.copy()
     P_inv = P_inv.T
     P = inv_sum_col * parcellation_masks
-    
     return P, P_inv
 
 
