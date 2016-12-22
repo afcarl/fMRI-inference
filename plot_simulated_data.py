@@ -83,3 +83,24 @@ def plot_slices(data, title=None):
     plt.subplots_adjust(hspace=0.05, wspace=0.05, left=.03, right=.97, top=.9)
     if title is not None:
         plt.suptitle(title, y=.95)
+
+
+def plot_row_slices(coefs):
+    """ Given a the coefs dictionray, plot the slices in a row
+    """
+    plt.figure(figsize=(8, 8))
+    vmax = np.abs(coefs.values()).max()
+    n_slices = coefs.values()[0].shape[-1]
+    n_keys = len(coefs.keys())
+    for q, key in enumerate(coefs.keys()):
+        data = coefs[key]
+        for i in range(n_slices):
+            plt.subplot(n_keys, n_slices, i + n_slices * q + 1)
+            plt.imshow(data[:, :, i], vmin=-vmax, vmax=vmax,
+                       interpolation="nearest", cmap=plt.cm.RdBu_r)
+            plt.xticks(())
+            plt.yticks(())
+        plt.text(x=-20, y= float(q) / n_keys - 1., s=key)
+        print(data.max(), data.min())
+    plt.subplots_adjust(hspace=0.01, wspace=0.1, left=.06, right=.99,
+                        top=.99, bottom=.01)

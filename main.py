@@ -3,7 +3,7 @@ import numpy as np
 from scipy.sparse import coo_matrix
 import matplotlib.pyplot as plt
 
-from plot_simulated_data import create_simulation_data, plot_slices
+from plot_simulated_data import create_simulation_data, plot_slices, plot_row_slices
 from stab_lasso import StabilityLasso, select_model_fdr
 from sklearn.metrics import roc_curve, precision_recall_curve
 from scipy.stats import pearsonr
@@ -21,60 +21,36 @@ def connectivity(shape):
     return connectivity
 
 
-def pedagogical_example(
-    shape=SHAPE, n_samples=100, split_ratio=.5, n_split=1,
-    random_seed=1, modulation=False, snr=-10, mean_size_clust=1, alpha=.05,
-    theta=.1):
+def pedagogical_example(shape=SHAPE, n_samples=100, split_ratio=.3, n_split=20,
+                        random_seed=1, modulation=False, snr=-10,
+                        mean_size_clust=1, alpha=.05, theta=.1):
     """Create a simple minded example with plots to figure it out"""
+    coefs = {}
     size = np.prod(shape)
     k = int(size / mean_size_clust)
 
     X, y, snr, noise, beta0, _ = \
         create_simulation_data(snr, n_samples, shape, random_seed,
                                modulation=modulation)
-    true_coeff = beta0 ** 2 > 0
+    coefs['true'] = np.reshape(beta0 * 20, shape)
 
     # Start with an ANOVA
     pvals = np.array([pearsonr(y, x)[1] for x in X.T])
     anova_model = select_model_fdr(pvals, alpha)
-    anova_coef = np.reshape(- np.log(pvals) * anova_model, shape)
+    coefs['anova'] = np.reshape(- np.log(pvals) * anova_model, shape)
 
-    # run the stablasso
     connectivity_ = connectivity(shape)
-    stability_lasso = StabilityLasso(
-        theta, n_split=n_split, ratio_split=split_ratio,
-        n_clusters=k, model_selection='univariate')
-    stability_lasso.fit(X, y, connectivity_)
-
-    # The trun to univariate feature selection
-    pvals = stability_lasso.univariate_split_pval(X, y)
-    univariate_model = stability_lasso.select_model_fdr(alpha)
-    univariate_coef = np.reshape(- np.log(pvals) * univariate_model, shape)
-
-    # then turn to "canonical" multivariate model
-    stability_lasso = StabilityLasso(
-        theta, n_split=n_split, ratio_split=split_ratio,
-        n_clusters=k, model_selection='multivariate').fit(X, y, connectivity_)
-    pvals = stability_lasso.multivariate_split_pval(X, y)
-    selected_model = stability_lasso.select_model_fdr(
-        alpha, normalize=False)
-    can_mult_coef = np.reshape(- np.log(pvals) * selected_model, shape)
-
-    # "scores multivariate"
-    stability_lasso = StabilityLasso(
-        theta, n_split=n_split, ratio_split=split_ratio,
-        n_clusters=k, model_selection='scores').fit(X, y, connectivity_)
-    stability_lasso.multivariate_split_scores(X, y)
-    selected_model = stability_lasso.select_model_fdr_scores(
-        alpha, normalize=False)
-    ext_mult_coef = np.reshape(- np.log(pvals) * selected_model, shape)
-    # TODO refactor all this a little bit to reduce verbosity
-
-    plot_slices(anova_coef, title="Anova")
-    plot_slices(univariate_coef, title="Univariate")
-    plot_slices(can_mult_coef, title='Canonical Mutlivariate')
-    plot_slices(ext_mult_coef, title='Extended Mutlivariate')
-    plot_slices(np.reshape(true_coeff, shape), title="Ground truth")
+    for model_selection in ['univariate', 'multivariate', 'scores']:
+        # run the stablasso
+        stability_lasso = StabilityLasso(
+            theta, n_split=n_split, ratio_split=split_ratio,
+            n_clusters=k, model_selection=model_selection)
+        stability_lasso.fit(X, y, connectivity_)
+        pvals = stability_lasso.univariate_split_pval(X, y)
+        selected_model = stability_lasso.select_model_fdr(alpha)
+        coefs[model_selection] = np.reshape(-np.log(pvals) * selected_model,
+                                             shape)
+    plot_row_slices(coefs)
     plt.show()
 
 
@@ -381,8 +357,8 @@ def anova_curve(roc_type='scores'):
 
 if __name__ == '__main__':
     pedagogical_example()
-    experiment_nominal_control(control_type='scores', clust_sizes=[1])
     """
+    experiment_nominal_control(control_type='scores', clust_sizes=[1])
     anova_curve()
     experiment_roc_curve('univariate')
     experiment_roc_curve('multivariate')
