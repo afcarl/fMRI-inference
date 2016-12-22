@@ -21,6 +21,63 @@ def connectivity(shape):
     return connectivity
 
 
+def pedagogical_example(
+    shape=SHAPE, n_samples=100, split_ratio=.5, n_split=1,
+    random_seed=1, modulation=False, snr=-10, mean_size_clust=1, alpha=.05,
+    theta=.1):
+    """Create a simple minded example with plots to figure it out"""
+    size = np.prod(shape)
+    k = int(size / mean_size_clust)
+
+    X, y, snr, noise, beta0, _ = \
+        create_simulation_data(snr, n_samples, shape, random_seed,
+                               modulation=modulation)
+    true_coeff = beta0 ** 2 > 0
+
+    # Start with an ANOVA
+    pvals = np.array([pearsonr(y, x)[1] for x in X.T])
+    anova_model = select_model_fdr(pvals, alpha)
+    anova_coef = np.reshape(- np.log(pvals) * anova_model, shape)
+
+    # run the stablasso
+    connectivity_ = connectivity(shape)
+    stability_lasso = StabilityLasso(
+        theta, n_split=n_split, ratio_split=split_ratio,
+        n_clusters=k, model_selection='univariate')
+    stability_lasso.fit(X, y, connectivity_)
+
+    # The trun to univariate feature selection
+    pvals = stability_lasso.univariate_split_pval(X, y)
+    univariate_model = stability_lasso.select_model_fdr(alpha)
+    univariate_coef = np.reshape(- np.log(pvals) * univariate_model, shape)
+
+    # then turn to "canonical" multivariate model
+    stability_lasso = StabilityLasso(
+        theta, n_split=n_split, ratio_split=split_ratio,
+        n_clusters=k, model_selection='multivariate').fit(X, y, connectivity_)
+    pvals = stability_lasso.multivariate_split_pval(X, y)
+    selected_model = stability_lasso.select_model_fdr(
+        alpha, normalize=False)
+    can_mult_coef = np.reshape(- np.log(pvals) * selected_model, shape)
+
+    # "scores multivariate"
+    stability_lasso = StabilityLasso(
+        theta, n_split=n_split, ratio_split=split_ratio,
+        n_clusters=k, model_selection='scores').fit(X, y, connectivity_)
+    stability_lasso.multivariate_split_scores(X, y)
+    selected_model = stability_lasso.select_model_fdr_scores(
+        alpha, normalize=False)
+    ext_mult_coef = np.reshape(- np.log(pvals) * selected_model, shape)
+    # TODO refactor all this a little bit to reduce verbosity
+
+    plot_slices(anova_coef, title="Anova")
+    plot_slices(univariate_coef, title="Univariate")
+    plot_slices(can_mult_coef, title='Canonical Mutlivariate')
+    plot_slices(ext_mult_coef, title='Extended Mutlivariate')
+    plot_slices(np.reshape(true_coeff, shape), title="Ground truth")
+    plt.show()
+
+
 def stat_test(model_selection='multivariate',
               control_type='pvals',
               plot=False,
@@ -31,7 +88,7 @@ def stat_test(model_selection='multivariate',
               mean_size_clust=1,
               theta=0.1,
               snr=-10,
-              rs=1,
+              random_seed=1,
               alpha=.2,
               shape=SHAPE):
 
@@ -39,7 +96,8 @@ def stat_test(model_selection='multivariate',
     k = int(size / mean_size_clust)
 
     X, y, snr, noise, beta0, _ = \
-        create_simulation_data(snr, n_samples, shape, rs, modulation=True)
+        create_simulation_data(snr, n_samples, shape, random_seed,
+                               modulation=True)
     true_coeff = beta0 ** 2 > 0
 
     if model_selection == 'anova':
@@ -63,25 +121,19 @@ def stat_test(model_selection='multivariate',
 
     if model_selection == 'univariate':
         pvals = stability_lasso.univariate_split_pval(X, y)
-    elif model_selection == 'multivariate':
-        pvals = stability_lasso.multivariate_split_pval(X, y)
-    else:
-        raise ValueError("This model selection method doesn't exist")
-
-    if model_selection == 'univariate':
         scores = pvals
-    elif model_selection == 'multivariate':
-        scores = stability_lasso.multivariate_split_scores(X, y)
-
-    if model_selection == 'univariate':
         selected_model = stability_lasso.select_model_fdr(alpha)
     elif model_selection == 'multivariate':
+        pvals = stability_lasso.multivariate_split_pval(X, y)
+        scores = stability_lasso.multivariate_split_scores(X, y)
         if control_type == 'pvals':
             selected_model = stability_lasso.select_model_fdr(
                 alpha, normalize=False)
         elif control_type == 'scores':
             selected_model = stability_lasso.select_model_fdr_scores(
                 alpha, normalize=False)
+    else:
+        raise ValueError("This model selection method doesn't exist")
 
     beta_corrected = np.zeros(size)
     if len(selected_model) > 0:
@@ -204,7 +256,7 @@ def multiple_test(n_test,
             mean_size_clust=mean_size_clust,
             theta=theta,
             snr=snr,
-            rs=rs_start + i,
+            random_seed=rs_start + i,
             print_results=False,
             plot=plot,
             alpha=alpha,
@@ -257,7 +309,7 @@ def experiment_roc_curve(model_selection='multivariate', roc_type='scores'):
                               mean_size_clust=mean_size_clust,
                               theta=theta,
                               snr=snr,
-                              rs=rs_start + i,
+                              random_seed=rs_start + i,
                               print_results=False,
                               plot=False) for i in range(n_test))
             pvals = [res_[2] for res_ in res]
@@ -308,7 +360,7 @@ def anova_curve(roc_type='scores'):
             model_selection='anova',
             n_samples=n_samples,
             snr=snr,
-            rs=rs_start + i,
+            random_seed=rs_start + i,
             print_results=False,
             plot=False)
         pvals.append(pval)
@@ -328,6 +380,7 @@ def anova_curve(roc_type='scores'):
 
 
 if __name__ == '__main__':
+    pedagogical_example()
     experiment_nominal_control(control_type='scores', clust_sizes=[1])
     """
     anova_curve()
