@@ -16,7 +16,7 @@ from sklearn.utils import check_random_state
 
 import nibabel
 
-ROI_SIZE = 2
+ROI_SIZE = 1
 SHAPE = (12, 12, 12)
 
 ###############################################################################
@@ -89,7 +89,8 @@ def plot_row_slices(coefs):
     """ Given a the coefs dictionray, plot the slices in a row
     """
     plt.figure(figsize=(8, 8))
-    vmax = np.abs(coefs.values()).max()
+    # vmax = np.abs(coefs.values()).max()
+    vmax = 10
     n_slices = coefs.values()[0].shape[-1]
     n_keys = len(coefs.keys())
     for q, key in enumerate(coefs.keys()):
@@ -100,7 +101,7 @@ def plot_row_slices(coefs):
                        interpolation="nearest", cmap=plt.cm.RdBu_r)
             plt.xticks(())
             plt.yticks(())
-        plt.text(x=-20, y= float(q) / n_keys - 1., s=key)
-        print(data.max(), data.min())
+        plt.text(x=-20, y=float(q) / n_keys - 1., s=key)
+        print('%s, max: %f, min: %f' % (key, data.max(), data.min()))
     plt.subplots_adjust(hspace=0.01, wspace=0.1, left=.06, right=.99,
                         top=.99, bottom=.01)
