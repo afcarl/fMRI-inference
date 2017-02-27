@@ -3,16 +3,14 @@ import numpy as np
 from scipy.sparse import coo_matrix
 import matplotlib.pyplot as plt
 
-from plot_simulated_data import create_simulation_data, plot_slices, plot_row_slices
 from stab_lasso import StabilityLasso, select_model_fdr
 from sklearn.metrics import roc_curve, precision_recall_curve
 from scipy.stats import pearsonr
 from joblib import Parallel, delayed
 
-import pdb
+from plot_simulated_data import create_simulation_data, plot_slices, plot_row_slices
 
 SHAPE = (6, 6, 6)
-
 
 def connectivity(shape):
     from sklearn.feature_extraction import image
@@ -50,6 +48,7 @@ def pedagogical_example(shape=SHAPE, n_samples=100, split_ratio=.3, n_split=20,
         selected_model = stability_lasso.select_model_fdr(alpha)
         coefs[model_selection] = np.reshape(-np.log(pvals) * selected_model,
                                              shape)
+
     plot_row_slices(coefs)
     plt.show()
 
