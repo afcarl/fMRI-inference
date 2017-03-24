@@ -8,9 +8,10 @@ from sklearn.metrics import roc_curve, precision_recall_curve
 from scipy.stats import pearsonr
 from joblib import Parallel, delayed
 
-from plot_simulated_data import create_simulation_data, plot_slices, plot_row_slices
+from plot_simulated_data import univariate_simulation, plot_slices, plot_row_slices
 
 SHAPE = (6, 6, 6)
+
 
 def connectivity(shape):
     from sklearn.feature_extraction import image
@@ -28,15 +29,15 @@ def pedagogical_example(shape=SHAPE, n_samples=100, split_ratio=.3, n_split=20,
     k = int(size / mean_size_clust)
 
     X, y, snr, noise, beta0, _ = \
-        create_simulation_data(snr, n_samples, shape, random_seed,
+        univariate_simulation(snr, n_samples, shape, random_seed,
                                modulation=modulation)
-    coefs['true'] = np.reshape(beta0 * 20, shape)
+    coefs['true'] = np.reshape(beta0 * 10, shape)
 
     # Start with an ANOVA
     pvals = np.array([pearsonr(y, x)[1] for x in X.T])
     anova_model = select_model_fdr(pvals, alpha)
-    coefs['anova'] = np.reshape(- np.log(pvals) * anova_model, shape)
-
+    coefs['anova'] = np.reshape(- np.log(
+            (pvals * len(anova_model)).clip(0, 1)) * anova_model, shape)
     connectivity_ = connectivity(shape)
     for model_selection in ['univariate', 'multivariate', 'scores']:
         # run the stablasso
@@ -44,11 +45,13 @@ def pedagogical_example(shape=SHAPE, n_samples=100, split_ratio=.3, n_split=20,
             theta, n_split=n_split, ratio_split=split_ratio,
             n_clusters=k, model_selection=model_selection)
         stability_lasso.fit(X, y, connectivity_)
-        pvals = stability_lasso.univariate_split_pval(X, y)
-        selected_model = stability_lasso.select_model_fdr(alpha)
+        if model_selection is 'univariate':
+            pvals = stability_lasso.univariate_split_pval(X, y)
+        else:
+            pvals = stability_lasso.multivariate_split_pval(X, y)
+        selected_model = stability_lasso.select_model_fdr(alpha, normalize=False)
         coefs[model_selection] = np.reshape(-np.log(pvals) * selected_model,
                                              shape)
-
     plot_row_slices(coefs)
     plt.show()
 
@@ -71,8 +74,8 @@ def stat_test(model_selection='multivariate',
     k = int(size / mean_size_clust)
 
     X, y, snr, noise, beta0, _ = \
-        create_simulation_data(snr, n_samples, shape, random_seed,
-                               modulation=True)
+        univariate_simulation(snr, n_samples, shape, random_seed,
+                              modulation=True)
     true_coeff = beta0 ** 2 > 0
 
     if model_selection == 'anova':

@@ -19,12 +19,11 @@ import nibabel
 ROI_SIZE = 1
 SHAPE = (12, 12, 12)
 
+
 ###############################################################################
 # Function to generate data
-def create_simulation_data(snr=0, n_samples=200, shape=SHAPE, random_state=1,
-                           modulation=False, roi_size=ROI_SIZE, smooth_X=1):
-    generator = check_random_state(random_state)
-    ### Coefs
+
+def generate_w(shape, roi_size):
     w = np.zeros(shape + (5,))
     w[0:roi_size, 0:roi_size, 0:roi_size, 0] = -0.6
     w[-roi_size:, -roi_size:, 0:roi_size, 1] = 0.5
@@ -33,6 +32,13 @@ def create_simulation_data(snr=0, n_samples=200, shape=SHAPE, random_state=1,
     w[(shape[0] - roi_size) // 2:(shape[0] + roi_size) // 2,
       (shape[1] - roi_size) // 2:(shape[1] + roi_size) // 2,
       (shape[2] - roi_size) // 2:(shape[2] + roi_size) // 2, 4] = 0.5
+    return w
+
+def univariate_simulation(snr=0, n_samples=200, shape=SHAPE, random_state=1,
+                          modulation=False, roi_size=ROI_SIZE, smooth_X=1):
+    generator = check_random_state(random_state)
+    w = generate_w(shape, roi_size)
+    ### Coefs
     if modulation:
         w = np.array([w_. ravel() for w_ in w.T])
     else:
@@ -70,6 +76,25 @@ def create_simulation_data(snr=0, n_samples=200, shape=SHAPE, random_state=1,
     return X, np.ravel(y_), snr, noise, w.sum(0)[np.newaxis], shape
 
 
+def multivariate_simulation(snr=0, n_samples=200, shape=SHAPE, random_state=1,
+                          modulation=False, roi_size=ROI_SIZE, smooth_X=1):
+    generator = check_random_state(random_state)
+    w = generate_w(shape, roi_size)
+    w = w.sum(-1).ravel()[np.newaxis]
+    X_ = generator.randn(n_samples, shape[0], shape[1], shape[2])
+    X = []
+    for i in range(n_samples):
+        Xi = ndimage.filters.gaussian_filter(X_[i], smooth_X)
+        X.append(Xi.ravel())
+
+    X = np.array(X)
+    y = np.dot(X, w.T)
+    noise = np.random.randn(len(y))
+    norm_noise = linalg.norm(y) / linalg.norm(noise) / np.exp(snr / 20.)
+    y += (noise * norm_noise)
+    return X, np.ravel(y), snr, noise, w.sum(0)[np.newaxis], shape
+
+
 def plot_slices(data, title=None):
     plt.figure(figsize=(5.5, 5.5))
     vmax = np.abs(data).max()
@@ -90,7 +115,7 @@ def plot_row_slices(coefs):
     """
     plt.figure(figsize=(8, 8))
     # vmax = np.abs(coefs.values()).max()
-    vmax = 10
+    vmax = 6
     n_slices = coefs.values()[0].shape[-1]
     n_keys = len(coefs.keys())
     for q, key in enumerate(coefs.keys()):
@@ -101,7 +126,8 @@ def plot_row_slices(coefs):
                        interpolation="nearest", cmap=plt.cm.RdBu_r)
             plt.xticks(())
             plt.yticks(())
-        plt.text(x=-20, y=float(q) / n_keys - 1., s=key)
+            if i == n_slices / 2:
+                plt.title(key)
         print('%s, max: %f, min: %f' % (key, data.max(), data.min()))
     plt.subplots_adjust(hspace=0.01, wspace=0.1, left=.06, right=.99,
                         top=.99, bottom=.01)
