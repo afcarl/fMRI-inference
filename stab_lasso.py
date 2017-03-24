@@ -5,9 +5,8 @@ from sklearn.utils import check_random_state
 from scipy.stats import pearsonr
 import statsmodels.api as sm
 from scipy.sparse import coo_matrix, dia_matrix
-from sklearn.preprocessing import LabelBinarizer
-
-import pdb
+from sklearn.preprocessing import LabelBinarizer, StandardScaler
+from sklearn.linear_model.base import center_data
 
 
 def projection(X, k, connectivity, ward=True):
@@ -53,7 +52,6 @@ def pp_inv(clust):
 def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
                             beta_array, split_array, clust_array):
     """Main function to obtain p-values across splits """
-    #pdb.set_trace()
     n, p = X.shape
     pvalues = np.ones((n_split, p))
     for i in range(n_split):
@@ -78,7 +76,6 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         pvalues_proj = np.ones(n_clusters)
         pvalues_proj[model_proj] = np.clip(
             model_proj_size * res.pvalues, 0., 1.)
-        #pdb.set_trace()
         pvalues[i] = P_inv.dot(pvalues_proj)
 
     if n_split > 1:
@@ -87,10 +84,10 @@ def multivariate_split_pval(X, y, n_split, size_split, n_clusters,
         pvalues_aggregated = pvalues[0]
     return pvalues, pvalues_aggregated
 
+
 def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
                               beta_array, split_array, clust_array):
     """Main function to obtain scores across splits """
-    #pdb.set_trace()
     n, p = X.shape
     scores = np.ones((n_split, p))
     for i in range(n_split):
@@ -108,18 +105,14 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
         model_proj = (beta_proj ** 2 > 0)
 
         beta = P_inv.dot(beta_proj)
-        model = (beta ** 2 > 0)
-        model_size = model.sum()
+        model_size = (beta ** 2 > 0).sum()
         X_test_proj = P.dot(X_test.T).T
         X_model = X_test_proj[:, model_proj]
 
         # fit the model on test data to get p-values
         res = sm.OLS(y_test, X_model).fit()
-        #print(res.summary())
         scores_proj = p * np.ones(n_clusters)
-        #scores_proj[model_proj] = model_proj_size * res.pvalues
         scores_proj[model_proj] = model_size * res.pvalues
-        #pdb.set_trace()
         scores[i] = P_inv.dot(scores_proj)
 
     if n_split > 1:
@@ -130,8 +123,8 @@ def multivariate_split_scores(X, y, n_split, size_split, n_clusters,
 
 
 def univariate_split_pval(X, y, n_split, size_split, n_clusters,
-                           beta_array, split_array, clust_array,
-                           permute=False):
+                          beta_array, split_array, clust_array,
+                          permute=False):
     """Univariate p-values computation
     todo: replace permutations with analytical tests
     """
@@ -161,8 +154,9 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
         else:
             pvalues_proj = np.array([pearsonr(y_test, x)[1]
                                      for x in X_test_proj.T])
-        pvalues[i, :] = P_inv.dot(pvalues_proj)
+        pvalues[i] = P_inv.dot(pvalues_proj)
 
+    pvalues = (pvalues * p).clip(0, 1)
     if n_split > 1:
         pvalues_aggregated = pvalues_aggregation(pvalues)
     else:
@@ -213,13 +207,25 @@ def univariate_split_scores(X, y, n_split, size_split, n_clusters,
 
 def pvalues_aggregation(pvalues, gamma_min=0.05):
     n_split, p = pvalues.shape
+    # 
     kmin = max(1, int(gamma_min * n_split))
     pvalues_sorted = np.sort(pvalues, axis=0)[kmin:]
     gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
-    pvalues_sorted = pvalues_sorted / gamma_array[:, np.newaxis]
+    pvalues_sorted /= gamma_array[:, np.newaxis]
     q = pvalues_sorted.min(axis=0)
-    q *= 1 - np.log(gamma_min)
+    q *= (1 - np.log(gamma_min))
     q = q.clip(0., 1.)
+    #
+    """
+    ###  my version
+    # caveat: ugly heuristic
+    support_size = len(np.unique(pvalues)) / n_split
+    adjusted_pvalues = np.minimum(np.sort(pvalues, axis=0) * support_size, 1)
+    gammas = np.linspace(1. / n_split, 1, n_split)
+    quantiles = (adjusted_pvalues.T / gammas).T
+    q_ = np.minimum(1, quantiles.min(axis=0) * (1 - np.log(1. / n_split)))
+    ###
+    """
     return q
 
 
@@ -228,17 +234,12 @@ def scores_aggregation(scores, gamma_min=0.05):
     kmin = max(1, int(gamma_min * n_split))
     scores_sorted = np.sort(scores, axis=0)[kmin:]
     gamma_array = 1. / n_split * (np.arange(kmin + 1, n_split + 1))
-    scores_sorted = scores_sorted / gamma_array[:, np.newaxis]
-    #q = scores_sorted.min(axis=0)
-    #scores_argmin = scores_sorted.argmin(axis=0)
-    #print scores_argmin[true_model]
-    #q *= 1 - np.log(gamma_min)
-    #pdb.set_trace()
+    scores_sorted /= gamma_array[:, np.newaxis]
     q = scores_sorted[0]
     return q
 
 
-def select_model_fdr(pvalues, q, independant=False, normalize=True):
+def select_model_fdr(pvalues, q, independent=False, normalize=False):
     """
     Return the model selected by the Benjamini-Hochberg procedure
 
@@ -248,33 +249,28 @@ def select_model_fdr(pvalues, q, independant=False, normalize=True):
     q : np.float
         The level chosen for the Benjamini-Hochberg procedure
 
-    independant : bool, optional
-        Tells if the features variables are independant. If they are not,
-        the procedure is the Benjamini-Hochberg-Yekutieli procedure
+    independent : bool, optional
+        Tells if the features variables are independent. If they are not,
+        an additional correction is applied (Benjamini-yekutieli)
 
     normalize : bool, optional
-        This option is usefull when computing the aggregated p-values
-        (then it has to be True)
-        Else, it is False
-
-
+        This option is useful when computing the aggregated p-values
     """
     p, = pvalues.shape
     pvalues_sorted = np.sort(pvalues) / np.arange(1, p + 1)
-    if not independant:
+    if not independent:
         q = q / np.log(p)
     if normalize:
         q = q / p
-
     if (pvalues_sorted > q).all():
         bound = 0
     else:
         h = np.where(pvalues_sorted <= q)[0][-1]
         bound = pvalues_sorted[h] * (h + 1)
-    return pvalues < bound
+    return pvalues <= bound
 
 
-def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
+def select_model_fdr_bounds(pvalues, independent=False, normalize=True):
     """
     Returns for each feature $i$ the bound $\alpha_i$ such that
     $i$ is selected by a Benjamini-Hochberg procedure of level q
@@ -290,7 +286,6 @@ def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
     pvalues_sorted = pvalues[pvalues_argsort]
     pvalues_sorted = pvalues_sorted / np.arange(1, p + 1)
 
-    #pdb.set_trace()
     bounds_sorted = pvalues_sorted
     for i in range(p - 1, 0, - 1):
         bounds_sorted[i - 1] = min(bounds_sorted[i - 1], bounds_sorted[i])
@@ -300,7 +295,7 @@ def select_model_fdr_bounds(pvalues, independant=False, normalize=True):
 
     if normalize:
         bounds *= p
-    if not independant:
+    if not independent:
         bounds *= np.log(p)
 
     bounds = np.clip(bounds, 0., 1.)
@@ -380,12 +375,12 @@ class StabilityLasso(LinearRegression):
             The target, in the model $y = X\beta$
 
         """
-        #self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
-        #y = self._label_binarizer.fit_transform(y)
-
-        X, y, X_mean, y_mean, X_std = self._center_data(
-            X, y, True, True, True)
-        self.intercept_ = y_mean
+        # X, y, X_mean, y_mean, X_std = center_data(
+        #    X, y, True, True, True)
+        st = StandardScaler()
+        y = st.fit_transform(y.reshape(-1, 1))
+        self.intercept_ = st.mean_
+        X = st.fit_transform(X)
 
         n, p = X.shape
         n_split = self.n_split
