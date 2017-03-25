@@ -16,7 +16,7 @@ from sklearn.utils import check_random_state
 
 import nibabel
 
-ROI_SIZE = 1
+ROI_SIZE = 2
 SHAPE = (12, 12, 12)
 
 
@@ -89,7 +89,7 @@ def multivariate_simulation(snr=0, n_samples=200, shape=SHAPE, random_state=1,
 
     X = np.array(X)
     y = np.dot(X, w.T)
-    noise = np.random.randn(len(y))
+    noise = np.random.randn(len(y), 1)
     norm_noise = linalg.norm(y) / linalg.norm(noise) / np.exp(snr / 20.)
     y += (noise * norm_noise)
     return X, np.ravel(y), snr, noise, w.sum(0)[np.newaxis], shape

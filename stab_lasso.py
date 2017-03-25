@@ -130,7 +130,6 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
     """
     n, p = X.shape
     pvalues = np.ones((n_split, p))
-    n_perm = 10000
     for i in range(n_split):
         split = np.zeros(n, dtype='bool')
         split[split_array[i]] = True
@@ -139,12 +138,13 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
 
         # projection
         P, P_inv = pp_inv(clust_array[i])
-
         X_test_proj = P.dot(X_test.T).T
-        corr_true = np.abs(np.dot(y_test, X_test_proj).reshape(
-                (n_clusters)))
+        X_proj = P.dot(X.T).T
 
         if permute:
+            n_perm = 10000
+            corr_true = np.abs(np.dot(y_test, X_test_proj).reshape(
+                    (n_clusters)))
             corr_perm = np.zeros((n_perm, n_clusters))
             for s in range(n_perm):
                 perm = np.random.permutation(int(n - size_split))
@@ -152,11 +152,13 @@ def univariate_split_pval(X, y, n_split, size_split, n_clusters,
             corr_perm = np.abs(corr_perm)
             pvalues_proj = 1. / n_perm * (corr_true < corr_perm).sum(axis=0)
         else:
-            pvalues_proj = np.array([pearsonr(y_test, x)[1]
-                                     for x in X_test_proj.T])
+            #pvalues_proj = np.array([pearsonr(y_test, x)[1]
+            #                         for x in X_test_proj.T])
+            pvalues_proj = np.array([pearsonr(y, x)[1]
+                                     for x in X_proj.T])
         pvalues[i] = P_inv.dot(pvalues_proj)
 
-    pvalues = (pvalues * p).clip(0, 1)
+    pvalues = (pvalues * len(pvalues_proj)).clip(0, 1)
     if n_split > 1:
         pvalues_aggregated = pvalues_aggregation(pvalues)
     else:
@@ -215,17 +217,6 @@ def pvalues_aggregation(pvalues, gamma_min=0.05):
     q = pvalues_sorted.min(axis=0)
     q *= (1 - np.log(gamma_min))
     q = q.clip(0., 1.)
-    #
-    """
-    ###  my version
-    # caveat: ugly heuristic
-    support_size = len(np.unique(pvalues)) / n_split
-    adjusted_pvalues = np.minimum(np.sort(pvalues, axis=0) * support_size, 1)
-    gammas = np.linspace(1. / n_split, 1, n_split)
-    quantiles = (adjusted_pvalues.T / gammas).T
-    q_ = np.minimum(1, quantiles.min(axis=0) * (1 - np.log(1. / n_split)))
-    ###
-    """
     return q
 
 

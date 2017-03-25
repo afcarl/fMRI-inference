@@ -8,9 +8,10 @@ from sklearn.metrics import roc_curve, precision_recall_curve
 from scipy.stats import pearsonr
 from joblib import Parallel, delayed
 
-from plot_simulated_data import univariate_simulation, plot_slices, plot_row_slices
+from plot_simulated_data import (univariate_simulation, plot_slices, plot_row_slices,
+                                 multivariate_simulation)
 
-SHAPE = (6, 6, 6)
+SHAPE = (12, 12, 12)
 
 
 def connectivity(shape):
@@ -21,15 +22,15 @@ def connectivity(shape):
 
 
 def pedagogical_example(shape=SHAPE, n_samples=100, split_ratio=.3, n_split=20,
-                        random_seed=1, modulation=False, snr=-10,
-                        mean_size_clust=1, alpha=.05, theta=.1):
+                        random_seed=1, modulation=False, snr=0,
+                        mean_size_clust=10, alpha=.05, theta=.1):
     """Create a simple minded example with plots to figure it out"""
     coefs = {}
     size = np.prod(shape)
     k = int(size / mean_size_clust)
 
     X, y, snr, noise, beta0, _ = \
-        univariate_simulation(snr, n_samples, shape, random_seed,
+        multivariate_simulation(snr, n_samples, shape, random_seed,
                                modulation=modulation)
     coefs['true'] = np.reshape(beta0 * 10, shape)
 
